@@ -1,0 +1,11 @@
+namespaces:
+- author:
+  - Paul Adkisson-Floro
+  contact:
+  - paul.wesley.adkisson@gmail.com
+  doc: NWB extension for the Guppy fiber photometry processing tool
+  name: ndx-guppy
+  schema:
+  - namespace: core
+  - source: ndx-guppy.extensions.yaml
+  version: 0.1.0
