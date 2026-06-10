@@ -16,6 +16,10 @@ The design turns GuPPy's organizing features into structured, queryable NWB feat
   referenced everywhere — no free-text strings to keep in sync.
 - **trace_type** is a closed *category* (`control_fit` / `dff` / `z_score`), so it is a plain enumerated text
   attribute stamped directly on each object.
+- **event** is the one *unbounded* axis (you can align to arbitrarily many behavioral events), so the
+  event-bearing products (`GuppyPSTH`, `GuppyPeakAUC`, `GuppyCrossCorrelation`) emit **one object per
+  condition** and concatenate every event's trials inside it — keeping the object count independent of how
+  many events a session has.
 
 Cross-extension dependencies are quarantined: products reference ndx-guppy's own registry tables, and any
 outward link to the acquisition `FiberPhotometryTable` or to a behavioral-events object is an **optional**
@@ -46,16 +50,20 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   columns `timestamp`, `amplitude`; attributes `trace_type`, `unit`.
 - **`GuppyTransientSummaryTable`** (extends `DynamicTable`) — per-session summary, one row per
   (region, trace_type); columns `region`, `trace_type`, `frequency_per_min`, `mean_amplitude`.
-- **`GuppyPSTH`** (extends `NWBDataInterface`) — peri-event PSTH for one (event, region, trace_type), stored as
-  a natural `(num_samples, num_trials)` matrix with across-trial `mean`/`error` and optional trial- or
-  time-based binning.
+- **`GuppyPSTH`** (extends `NWBDataInterface`) — peri-event PSTH for one **(region, trace_type) condition**,
+  with every event's trials concatenated along the trials axis: a `(num_samples, num_trials)` `traces` matrix
+  labeled by a per-trial `event` reference, `mean`/`error` of shape `(num_samples, num_events)` labeled by a
+  `summary_event` reference, and optional binning concatenated across events with a `bin_event` reference.
 - **`GuppyCrossCorrelation`** (extends `NWBDataInterface`) — peri-event cross-correlation for one
-  (event, trace_type, region-pair), stored as a `(num_lags, num_trials)` matrix with `mean`/`error` and
-  optional binning.
+  **(trace_type, region-pair) condition**, concatenated across events: a `(num_lags, num_trials)` `trials`
+  matrix with per-trial `event`, `mean`/`error` of shape `(num_lags, num_events)` with `summary_event`, and
+  optional binning with `bin_event`.
 - **`GuppyPeakAUC`** (extends `NWBDataInterface`) — peak/area summary of a PSTH for one
-  (event, region, trace_type). GuPPy computes `peak_positive`/`peak_negative`/`area_under_curve`
-  for every trial, every bin, and the across-trial mean within each peak window, so each metric is
-  a `(num_windows, num_trials)` matrix plus a per-window mean (and optional per-bin) value.
+  **(region, trace_type) condition**, concatenated across events. GuPPy computes
+  `peak_positive`/`peak_negative`/`area_under_curve` for every trial, every bin, and the across-trial mean
+  within each peak window, so each per-trial metric is a `(num_windows, num_trials)` matrix (per-trial `event`),
+  each mean metric is `(num_windows, num_events)` (`summary_event`), and the optional per-bin metrics carry a
+  `bin_event` reference.
 - **`GuppyValidSignalIntervals`** (extends `TimeIntervals`) — artifact-free valid-signal windows with a
   structured `region` reference per interval.
 
@@ -151,33 +159,39 @@ transients.add_row(region=0, timestamp=1.5, amplitude=2.3)
 transients.add_row(region=0, timestamp=4.2, amplitude=1.8)
 module.add(transients)
 
-# A peri-event PSTH as a (num_samples, num_trials) matrix.
+# A peri-event PSTH for the (dms, z_score) condition. Trials from every event are concatenated along
+# the trials axis: `event` labels each trial, `summary_event` labels each mean/error column. Here all
+# three trials happen to be the same event, so num_events = 1.
 psth = GuppyPSTH(
-    name="psth_port_entries_dms_z_score",
+    name="psth_dms_z_score",
     trace_type="z_score",
     baseline_corrected=True,
     unit="a.u.",
     region=DynamicTableRegion(name="region", data=[0], description="dms", table=regions),
-    event=DynamicTableRegion(name="event", data=[0], description="port_entries", table=events),
+    event=DynamicTableRegion(name="event", data=[0, 0, 0], description="per-trial event", table=events),
+    summary_event=DynamicTableRegion(name="summary_event", data=[0], description="per-event column", table=events),
     peri_event_time=np.linspace(-1.0, 2.0, 90),
     trial_onset_times=np.array([10.0, 20.0, 30.0]),
-    traces=np.random.randn(90, 3),
-    mean=np.zeros(90),
-    error=np.zeros(90),
+    traces=np.random.randn(90, 3),  # (num_samples, num_trials)
+    mean=np.zeros((90, 1)),  # (num_samples, num_events)
+    error=np.zeros((90, 1)),
 )
 module.add(psth)
 
-# A cross-correlation between two regions, aligned to an event: region references two rows.
+# A cross-correlation for the (z_score, dms-dls) condition: region references two rows, trials are
+# concatenated across events just like the PSTH.
 cross_correlation = GuppyCrossCorrelation(
-    name="xcorr_port_entries_z_score_dms_dls",
+    name="xcorr_z_score_dms_dls",
     trace_type="z_score",
     unit="a.u.",
     region=DynamicTableRegion(name="region", data=[0, 1], description="dms, dls", table=regions),
-    event=DynamicTableRegion(name="event", data=[0], description="port_entries", table=events),
+    event=DynamicTableRegion(name="event", data=[0, 0, 0], description="per-trial event", table=events),
+    summary_event=DynamicTableRegion(name="summary_event", data=[0], description="per-event column", table=events),
     lag=np.linspace(-1.0, 1.0, 101),
-    trials=np.random.randn(101, 3),
-    mean=np.zeros(101),
-    error=np.zeros(101),
+    trial_onset_times=np.array([10.0, 20.0, 30.0]),
+    trials=np.random.randn(101, 3),  # (num_lags, num_trials)
+    mean=np.zeros((101, 1)),  # (num_lags, num_events)
+    error=np.zeros((101, 1)),
 )
 module.add(cross_correlation)
 
@@ -188,7 +202,7 @@ with NWBHDF5IO("guppy_session.nwb", mode="r", load_namespaces=True) as io:
     read_nwbfile = io.read()
     guppy = read_nwbfile.processing["guppy"]
     print(guppy["z_score_dms"].trace_type)                          # "z_score"
-    print(guppy["psth_port_entries_dms_z_score"].traces.shape)      # (90, 3) -> (num_samples, num_trials)
+    print(guppy["psth_dms_z_score"].traces.shape)                   # (90, 3) -> (num_samples, num_trials)
     print(read_nwbfile.lab_meta_data["guppy_parameters"].zscore_method)  # "standard"
 ```
 
@@ -247,24 +261,28 @@ classDiagram
         --
         attribute trace_type, unit : text
         attribute baseline_corrected : bool
-        DynamicTableRegion region, event
+        DynamicTableRegion region
+        DynamicTableRegion event, summary_event, bin_event
         dataset traces (num_samples, num_trials)
+        dataset mean (num_samples, num_events)
     }
     class GuppyCrossCorrelation {
         <<ndx-guppy>>
         --
         attribute trace_type, unit : text
-        DynamicTableRegion region, event
+        DynamicTableRegion region (2)
+        DynamicTableRegion event, summary_event, bin_event
         dataset trials (num_lags, num_trials)
-        dataset trial_onset_times (num_trials)
+        dataset mean (num_lags, num_events)
     }
     class GuppyPeakAUC {
         <<ndx-guppy>>
         --
         attribute trace_type, unit : text
-        DynamicTableRegion region, event
+        DynamicTableRegion region
+        DynamicTableRegion event, summary_event, bin_event
         dataset peak_positive (num_windows, num_trials)
-        dataset mean_peak_positive (num_windows)
+        dataset mean_peak_positive (num_windows, num_events)
     }
     class GuppyValidSignalIntervals {
         <<ndx-guppy>>

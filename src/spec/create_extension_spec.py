@@ -43,9 +43,13 @@ def region_region(doc, quantity=1):
     return NWBDatasetSpec(name="region", neurodata_type_inc="DynamicTableRegion", doc=doc, quantity=quantity)
 
 
-def event_region(doc, quantity=1):
-    """A ``DynamicTableRegion`` referencing a row of the ``GuppyEventsTable``."""
-    return NWBDatasetSpec(name="event", neurodata_type_inc="DynamicTableRegion", doc=doc, quantity=quantity)
+def event_region(doc, quantity=1, name="event"):
+    """A ``DynamicTableRegion`` referencing rows of the ``GuppyEventsTable``.
+
+    The same helper builds the per-trial ``event`` reference, the per-summary-column
+    ``summary_event`` reference, and the per-bin ``bin_event`` reference.
+    """
+    return NWBDatasetSpec(name=name, neurodata_type_inc="DynamicTableRegion", doc=doc, quantity=quantity)
 
 
 def main():
@@ -236,8 +240,11 @@ def main():
         neurodata_type_def="GuppyPSTH",
         neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peri-event PSTH for one (event, region, trace_type), stored as a natural samples-by-trials "
-            "matrix. The baseline-uncorrected variant is a second GuppyPSTH with baseline_corrected=False."
+            "Peri-event PSTH for one (region, trace_type) condition, concatenated across events. The "
+            "per-trial 'traces' matrix stacks every event's trials along the trials axis (each trial "
+            "labeled by the per-trial 'event' reference); 'mean'/'error' hold GuPPy's across-trial "
+            "summary, one column per event ('summary_event'). The baseline-uncorrected variant is a "
+            "second GuppyPSTH with baseline_corrected=False."
         ),
         attributes=[
             trace_type_attr(),
@@ -252,7 +259,19 @@ def main():
         ],
         datasets=[
             region_region(doc="Reference to the GuppyRegionsTable row for this PSTH's region (single row)."),
-            event_region(doc="Reference to the GuppyEventsTable row for this PSTH's event (single row)."),
+            event_region(
+                doc=(
+                    "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)), "
+                    "labeling which event each column of 'traces' was aligned to."
+                ),
+            ),
+            event_region(
+                name="summary_event",
+                doc=(
+                    "Per-summary-column reference into GuppyEventsTable: one row per event type "
+                    "(shape (num_events,)), labeling the columns of 'mean'/'error'."
+                ),
+            ),
             NWBDatasetSpec(
                 name="peri_event_time",
                 doc="Peri-event time axis in seconds (relative to event onset), shape (num_samples,).",
@@ -262,37 +281,47 @@ def main():
             ),
             NWBDatasetSpec(
                 name="trial_onset_times",
-                doc="Absolute onset time of each trial in seconds (session clock), shape (num_trials,).",
+                doc=(
+                    "Absolute onset time of each trial in seconds (session clock), shape (num_trials,), "
+                    "concatenated across events in the same order as the 'traces' columns."
+                ),
                 dtype="float64",
                 shape=(None,),
                 dims=("num_trials",),
             ),
             NWBDatasetSpec(
                 name="traces",
-                doc="Per-trial response, shape (num_samples, num_trials). Time is the first axis.",
+                doc=(
+                    "Per-trial response, shape (num_samples, num_trials). Time is the first axis. Trials "
+                    "from every event are concatenated along the second axis; see the 'event' reference."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_samples", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="mean",
-                doc="Across-trial mean at each peri-event time, shape (num_samples,).",
+                doc="Across-trial mean at each peri-event time, one column per event, shape (num_samples, num_events).",
                 dtype="float64",
-                shape=(None,),
-                dims=("num_samples",),
+                shape=(None, None),
+                dims=("num_samples", "num_events"),
             ),
             NWBDatasetSpec(
                 name="error",
-                doc="Across-trial error (e.g. SEM) at each peri-event time, shape (num_samples,).",
+                doc=(
+                    "Across-trial error (e.g. SEM) at each peri-event time, one column per event, "
+                    "shape (num_samples, num_events)."
+                ),
                 dtype="float64",
-                shape=(None,),
-                dims=("num_samples",),
+                shape=(None, None),
+                dims=("num_samples", "num_events"),
             ),
             NWBDatasetSpec(
                 name="bin_edges",
                 doc=(
-                    "Optional bin definitions, shape (num_bins, 2). Each row is [start, stop); interpreted as "
-                    "trial-index ranges or time ranges according to the bin_basis attribute."
+                    "Optional bin definitions, shape (num_bins, 2), concatenated across events. Each row is "
+                    "[start, stop); interpreted as trial-index ranges or time ranges according to the "
+                    "bin_basis attribute. See the 'bin_event' reference for each bin's event."
                 ),
                 dtype="float64",
                 shape=(None, 2),
@@ -306,9 +335,17 @@ def main():
                     )
                 ],
             ),
+            event_region(
+                name="bin_event",
+                quantity="?",
+                doc=(
+                    "Per-bin reference into GuppyEventsTable: one row per bin (shape (num_bins,)), labeling "
+                    "the columns of 'binned_mean'/'binned_error'."
+                ),
+            ),
             NWBDatasetSpec(
                 name="binned_mean",
-                doc="Optional per-bin mean, shape (num_samples, num_bins).",
+                doc="Optional per-bin mean, shape (num_samples, num_bins), concatenated across events.",
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_samples", "num_bins"),
@@ -316,7 +353,7 @@ def main():
             ),
             NWBDatasetSpec(
                 name="binned_error",
-                doc="Optional per-bin error, shape (num_samples, num_bins).",
+                doc="Optional per-bin error, shape (num_samples, num_bins), concatenated across events.",
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_samples", "num_bins"),
@@ -329,9 +366,10 @@ def main():
         neurodata_type_def="GuppyCrossCorrelation",
         neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peri-event cross-correlation for one (event, trace_type, region-pair), stored as a "
-            "samples-by-trials matrix over a lag axis. The region reference points at two rows "
-            "(region_1, region_2)."
+            "Peri-event cross-correlation for one (trace_type, region-pair) condition, concatenated across "
+            "events, stored as a lags-by-trials matrix over a lag axis. The region reference points at two "
+            "rows (region_1, region_2); the per-trial 'event' reference labels each trials column and "
+            "'mean'/'error' hold the across-trial summary, one column per event ('summary_event')."
         ),
         attributes=[
             trace_type_attr(),
@@ -343,7 +381,19 @@ def main():
             region_region(
                 doc="Reference to the two GuppyRegionsTable rows (region_1, region_2) for this cross-correlation.",
             ),
-            event_region(doc="Reference to the GuppyEventsTable row for this cross-correlation's event (single row)."),
+            event_region(
+                doc=(
+                    "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)), "
+                    "labeling which event each column of 'trials' was aligned to."
+                ),
+            ),
+            event_region(
+                name="summary_event",
+                doc=(
+                    "Per-summary-column reference into GuppyEventsTable: one row per event type "
+                    "(shape (num_events,)), labeling the columns of 'mean'/'error'."
+                ),
+            ),
             NWBDatasetSpec(
                 name="lag",
                 doc="Lag axis in seconds (symmetric around zero), shape (num_lags,).",
@@ -353,37 +403,44 @@ def main():
             ),
             NWBDatasetSpec(
                 name="trial_onset_times",
-                doc="Absolute onset time of each trial in seconds (session clock), shape (num_trials,).",
+                doc=(
+                    "Absolute onset time of each trial in seconds (session clock), shape (num_trials,), "
+                    "concatenated across events in the same order as the 'trials' columns."
+                ),
                 dtype="float64",
                 shape=(None,),
                 dims=("num_trials",),
             ),
             NWBDatasetSpec(
                 name="trials",
-                doc="Per-trial cross-correlation, shape (num_lags, num_trials). Lag is the first axis.",
+                doc=(
+                    "Per-trial cross-correlation, shape (num_lags, num_trials). Lag is the first axis. Trials "
+                    "from every event are concatenated along the second axis; see the 'event' reference."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_lags", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="mean",
-                doc="Across-trial mean cross-correlation at each lag, shape (num_lags,).",
+                doc="Across-trial mean cross-correlation at each lag, one column per event, shape (num_lags, num_events).",
                 dtype="float64",
-                shape=(None,),
-                dims=("num_lags",),
+                shape=(None, None),
+                dims=("num_lags", "num_events"),
             ),
             NWBDatasetSpec(
                 name="error",
-                doc="Across-trial error at each lag, shape (num_lags,).",
+                doc="Across-trial error at each lag, one column per event, shape (num_lags, num_events).",
                 dtype="float64",
-                shape=(None,),
-                dims=("num_lags",),
+                shape=(None, None),
+                dims=("num_lags", "num_events"),
             ),
             NWBDatasetSpec(
                 name="bin_edges",
                 doc=(
-                    "Optional bin definitions, shape (num_bins, 2). Each row is [start, stop); interpreted as "
-                    "trial-index ranges or time ranges according to the bin_basis attribute."
+                    "Optional bin definitions, shape (num_bins, 2), concatenated across events. Each row is "
+                    "[start, stop); interpreted as trial-index ranges or time ranges according to the "
+                    "bin_basis attribute. See the 'bin_event' reference for each bin's event."
                 ),
                 dtype="float64",
                 shape=(None, 2),
@@ -397,9 +454,17 @@ def main():
                     )
                 ],
             ),
+            event_region(
+                name="bin_event",
+                quantity="?",
+                doc=(
+                    "Per-bin reference into GuppyEventsTable: one row per bin (shape (num_bins,)), labeling "
+                    "the columns of 'binned_mean'/'binned_error'."
+                ),
+            ),
             NWBDatasetSpec(
                 name="binned_mean",
-                doc="Optional per-bin mean, shape (num_lags, num_bins).",
+                doc="Optional per-bin mean, shape (num_lags, num_bins), concatenated across events.",
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_lags", "num_bins"),
@@ -407,7 +472,7 @@ def main():
             ),
             NWBDatasetSpec(
                 name="binned_error",
-                doc="Optional per-bin error, shape (num_lags, num_bins).",
+                doc="Optional per-bin error, shape (num_lags, num_bins), concatenated across events.",
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_lags", "num_bins"),
@@ -420,10 +485,11 @@ def main():
         neurodata_type_def="GuppyPeakAUC",
         neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peak and area-under-curve summary of a peri-event PSTH for one (event, region, trace_type). "
-            "GuPPy computes peak_positive, peak_negative, and area for every trial, every bin, and the "
-            "across-trial mean within each peak window, so this is a (num_windows, ...) matrix per metric "
-            "rather than a single row."
+            "Peak and area-under-curve summary of a peri-event PSTH for one (region, trace_type) condition, "
+            "concatenated across events. GuPPy computes peak_positive, peak_negative, and area for every "
+            "trial, every bin, and the across-trial mean within each peak window. The per-trial metric "
+            "matrices stack every event's trials along the trials axis (labeled by the per-trial 'event' "
+            "reference); the mean_* metrics hold one column per event ('summary_event')."
         ),
         attributes=[
             trace_type_attr(),
@@ -431,7 +497,19 @@ def main():
         ],
         datasets=[
             region_region(doc="Reference to the GuppyRegionsTable row for this summary's region (single row)."),
-            event_region(doc="Reference to the GuppyEventsTable row for this summary's event (single row)."),
+            event_region(
+                doc=(
+                    "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)), "
+                    "labeling which event each column of the per-trial metric matrices was aligned to."
+                ),
+            ),
+            event_region(
+                name="summary_event",
+                doc=(
+                    "Per-summary-column reference into GuppyEventsTable: one row per event type "
+                    "(shape (num_events,)), labeling the columns of the mean_* metrics."
+                ),
+            ),
             NWBDatasetSpec(
                 name="window_start",
                 doc="Start of each peak window in seconds (relative to event onset), shape (num_windows,).",
@@ -448,58 +526,68 @@ def main():
             ),
             NWBDatasetSpec(
                 name="trial_onset_times",
-                doc="Absolute onset time of each trial in seconds (session clock), shape (num_trials,).",
+                doc=(
+                    "Absolute onset time of each trial in seconds (session clock), shape (num_trials,), "
+                    "concatenated across events in the same order as the per-trial metric columns."
+                ),
                 dtype="float64",
                 shape=(None,),
                 dims=("num_trials",),
             ),
             NWBDatasetSpec(
                 name="peak_positive",
-                doc="Per-trial maximum within each window, shape (num_windows, num_trials).",
+                doc="Per-trial maximum within each window, shape (num_windows, num_trials), concatenated across events.",
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="peak_negative",
-                doc="Per-trial minimum within each window, shape (num_windows, num_trials).",
+                doc="Per-trial minimum within each window, shape (num_windows, num_trials), concatenated across events.",
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="area_under_curve",
-                doc="Per-trial area within each window (trapezoidal), shape (num_windows, num_trials).",
+                doc=(
+                    "Per-trial area within each window (trapezoidal), shape (num_windows, num_trials), "
+                    "concatenated across events."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="mean_peak_positive",
-                doc="Across-trial-mean trace maximum within each window, shape (num_windows,).",
+                doc="Across-trial-mean trace maximum within each window, one column per event, shape (num_windows, num_events).",
                 dtype="float64",
-                shape=(None,),
-                dims=("num_windows",),
+                shape=(None, None),
+                dims=("num_windows", "num_events"),
             ),
             NWBDatasetSpec(
                 name="mean_peak_negative",
-                doc="Across-trial-mean trace minimum within each window, shape (num_windows,).",
+                doc="Across-trial-mean trace minimum within each window, one column per event, shape (num_windows, num_events).",
                 dtype="float64",
-                shape=(None,),
-                dims=("num_windows",),
+                shape=(None, None),
+                dims=("num_windows", "num_events"),
             ),
             NWBDatasetSpec(
                 name="mean_area_under_curve",
-                doc="Across-trial-mean trace area within each window (trapezoidal), shape (num_windows,).",
+                doc=(
+                    "Across-trial-mean trace area within each window (trapezoidal), one column per event, "
+                    "shape (num_windows, num_events)."
+                ),
                 dtype="float64",
-                shape=(None,),
-                dims=("num_windows",),
+                shape=(None, None),
+                dims=("num_windows", "num_events"),
             ),
             NWBDatasetSpec(
                 name="bin_edges",
                 doc=(
-                    "Optional bin definitions, shape (num_bins, 2). Each row is [start, stop); interpreted as "
-                    "trial-index ranges or time ranges according to the bin_basis attribute."
+                    "Optional bin definitions, shape (num_bins, 2), concatenated across events. Each row is "
+                    "[start, stop); interpreted as trial-index ranges or time ranges according to the "
+                    "bin_basis attribute. See the 'bin_event' reference for each bin's event."
                 ),
                 dtype="float64",
                 shape=(None, 2),
@@ -511,9 +599,20 @@ def main():
                     )
                 ],
             ),
+            event_region(
+                name="bin_event",
+                quantity="?",
+                doc=(
+                    "Per-bin reference into GuppyEventsTable: one row per bin (shape (num_bins,)), labeling "
+                    "the columns of the binned_* metrics."
+                ),
+            ),
             NWBDatasetSpec(
                 name="binned_peak_positive",
-                doc="Optional per-bin (binned-mean trace) maximum within each window, shape (num_windows, num_bins).",
+                doc=(
+                    "Optional per-bin (binned-mean trace) maximum within each window, shape "
+                    "(num_windows, num_bins), concatenated across events."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_bins"),
@@ -521,7 +620,10 @@ def main():
             ),
             NWBDatasetSpec(
                 name="binned_peak_negative",
-                doc="Optional per-bin (binned-mean trace) minimum within each window, shape (num_windows, num_bins).",
+                doc=(
+                    "Optional per-bin (binned-mean trace) minimum within each window, shape "
+                    "(num_windows, num_bins), concatenated across events."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_bins"),
@@ -529,7 +631,10 @@ def main():
             ),
             NWBDatasetSpec(
                 name="binned_area_under_curve",
-                doc="Optional per-bin (binned-mean trace) area within each window, shape (num_windows, num_bins).",
+                doc=(
+                    "Optional per-bin (binned-mean trace) area within each window, shape "
+                    "(num_windows, num_bins), concatenated across events."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_bins"),

@@ -38,14 +38,17 @@ Two subtleties worth calling out, because they explain otherwise-surprising coun
 
 ## 2. How many of each object
 
-The key distinction is **what GuPPy produces per combination of axes**:
+Two rules set the layout. The first decides whether an axis becomes rows or objects; the
+second decides which axis is absorbed into the *data* rather than spawning objects at all:
 
-- A **scalar (or fixed small tuple) per combination** → the axis collapses into **table rows**.
-  One object, `n` rows.
-- An **array per combination** (a timeseries, or a `(time × trials)` matrix) → each combination
-  is its **own object**. `n` objects.
-
-That single rule explains the entire layout.
+- **Scalar-per-combination → table rows; array-per-combination → objects.** A scalar result
+  per combination collapses the axis into one table's rows; an array result (a timeseries, or
+  a `(time × trials)` matrix) makes each combination its own object.
+- **The unbounded axis is concatenated into the data, not multiplied into objects.** Of the
+  axes, only `n_events` grows without bound (you can align to arbitrarily many behavioral
+  events). So the event-bearing products — PSTH, peak/AUC, cross-correlation — emit **one
+  object per condition** (the bounded axes) and stack every event's trials *inside* that object
+  (see §5). The object count is therefore **invariant to `n_events`.**
 
 ### Session singletons — axes collapsed into rows
 
@@ -59,38 +62,38 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 | `GuppyTransientSummaryTable` | `n_regions × n_features` (= 4 rows) | **1** |
 | `GuppyValidSignalIntervals` | `n_regions` (only if artifact coords exist) | **0** here |
 
-### Per-combination objects — axes that carry arrays
+### Per-condition objects — axes that carry arrays
 
-These hold an array per combination, so each combination is a separate object.
+These hold an array per condition, so each condition is a separate object. Note the absence of
+`n_events` from every multiplicity — it lives *inside* the objects, along the trials axis.
 
 | Object | Multiplicity | Fixture count |
 |---|---|---|
 | `GuppyDerivedResponseSeries` | `n_regions × n_traces` | 2 × 3 = **6** |
 | `GuppyTransientsTable` | `n_regions × n_features` | 2 × 2 = **4** |
-| `GuppyCrossCorrelation` | `n_events × n_features × n_region_pairs` | 3 × 2 × 1 = **6** |
-| `GuppyPSTH` | `n_events × n_regions × n_features × n_baselines` | 3 × 2 × 2 × 2 = **24** |
-| `GuppyPeakAUC` | `n_events × n_regions × n_features` | 3 × 2 × 2 = **12** |
+| `GuppyCrossCorrelation` | `n_features × n_region_pairs` | 2 × 1 = **2** |
+| `GuppyPSTH` | `n_regions × n_features × n_baselines` | 2 × 2 × 2 = **8** |
+| `GuppyPeakAUC` | `n_regions × n_features` | 2 × 2 = **4** |
 
 ---
 
-## 3. The total, and what dominates
+## 3. The total
 
 ```
 singletons          4   (regions + events + parameters + transient summary)
 derived traces      6   = n_regions · n_traces
 transients          4   = n_regions · n_features
-cross-correlation   6   = n_events · n_features · n_region_pairs
-PSTH               24   = n_events · n_regions · n_features · n_baselines
-peak / AUC         12   = n_events · n_regions · n_features
+cross-correlation   2   = n_features · n_region_pairs
+PSTH                8   = n_regions · n_features · n_baselines
+peak / AUC          4   = n_regions · n_features
                   ───
-total              56
+total              28
 ```
 
-**The PSTH count dominates because it is the only product that multiplies *all four* of the
-big axes** — events, regions, features, and baseline variants. PSTH (24) and peak/AUC (12)
-together are the two products carrying the `n_events` factor, and they are **36 of 56 objects
-(64%)**. This is the "~20 PSTH objects" you noticed: it is `n_events · n_regions · n_features ·
-n_baselines`, and there is no smaller honest number for it *as separate objects*.
+No multiplicity carries `n_events`, so adding behavioral events does not add objects — it adds
+*columns* to the existing PSTH/peak-AUC/cross-correlation objects. Before the events axis was
+concatenated this same fixture produced **56** objects (PSTH alone was 24); the event-bearing
+products were 64% of the file and grew linearly with `n_events`. They are now 14 of 28, fixed.
 
 ---
 
@@ -107,33 +110,58 @@ does **not** proliferate identity: there are still only `n_regions + n_events` i
 the whole file.
 
 **(b) Scalar-per-combination collapses to rows; array-per-combination becomes an object.**
-This is the rule that sets the object count.
 - The transient *summary* is one frequency + one mean amplitude per `(region, feature)` — scalars
   — so all `n_regions · n_features` combinations live as **rows in one table**.
-- A PSTH is a `(time × trials)` **matrix** per `(event, region, feature, baseline)` — an array —
-  so each combination is **its own object**.
+- A PSTH is a `(time × trials)` **matrix** per condition — an array — so each condition is
+  **its own object**.
 
-The 56 objects are not 56 modelling decisions; they are the count of array-valued results GuPPy
-actually computed, plus a handful of tables that absorb everything scalar.
+The 28 objects are not 28 modelling decisions; they are the count of array-valued results GuPPy
+computed (with the event axis folded inside), plus a handful of tables that absorb everything
+scalar.
 
-**(c) Categories are attributes, entities are references — and that is *why* we don't merge the
-matrices into one mega-table.** `trace_type` is a closed category (`control_fit`/`dff`/`z_score`),
-so it is stamped as an **attribute** on each object. Keeping each PSTH/transient/peak-AUC as a
-separate object is exactly what lets `trace_type`, `region`, and `event` stay
-attributes-and-references *on the object*. The moment you consolidate, say, all PSTHs into one
-table with rows = `(event, region, feature)`, those axes are forced to become **data columns**,
-and the per-trial matrices become a doubly-ragged column (trials vary by event) — the one storage
-shape HDMF handles worst. Splitting by combination is what keeps every array rectangular and every
-category an attribute rather than a column.
+**(c) Bounded axes split objects; the unbounded axis is concatenated.** `trace_type` is a
+closed category (`control_fit`/`dff`/`z_score`) stamped as an **attribute**; `region` and the
+baseline flag are likewise bounded and stay attributes/refs on the object. Splitting objects
+along these *bounded* axes keeps `trace_type`/`region`/`baseline` as attributes and every array
+rectangular. The **event** axis is different — it is unbounded, so splitting on it would let the
+file grow without limit. Instead it is concatenated into the trials axis *inside* each object,
+and `event` (which genuinely varies trial-to-trial) becomes a per-trial `DynamicTableRegion`
+into `GuppyEventsTable`. That is the rule working as intended, not a violation of it: bounded
+categories stay attributes; the one unbounded entity becomes data.
 
-### The shape-boundary corollary
+---
 
-If the object count ever *does* need to come down, the principled lever is visible in the
-formulas: only **`n_events`** changes the *shape* of a PSTH/peak-AUC array (different events have
-different trial counts). `n_regions`, `n_features`, and `n_baselines` produce
-**identically-shaped** arrays. So the only consolidation that doesn't fight HDMF is collapsing
-those same-shape axes into extra array dimensions *within* an object, splitting solely on
-`n_events` — turning `n_events · n_regions · n_features · n_baselines` objects into `n_events`
-objects. We have **not** done this (it trades 24 self-describing objects for 3 objects with
-internal index bookkeeping), but it is the one consolidation the data structure permits, and it
-is worth knowing it exists.
+## 5. Concatenating the unbounded axis (how an event-bearing object is shaped)
+
+Concatenating events works — without duplication or ragged storage — because of two facts about
+GuPPy's data:
+
+- **Different event types are genuinely different trials.** `port_entries` occurrence #3 and
+  `rewarded_nose_pokes` occurrence #1 are two distinct alignment windows, so stacking them along
+  the trials axis adds real trials, not copies. "Trials stay trials."
+- **The peri-event window is one parameter**, so `num_samples` (the time axis) is identical
+  across every event. Concatenating along trials keeps the matrix rectangular; only the trial
+  *count* differed per event, and concatenation sums that count out.
+
+Each event-bearing object is therefore a **three-grain structure**, every axis flat-concatenated
+across events with its own event `DynamicTableRegion` (the CSR-style way to hold ragged groups):
+
+| Grain | Size | Holds | Event label |
+|---|---|---|---|
+| trials | `num_trials` = Σ over events | `traces` `(num_samples, num_trials)`, `trial_onset_times` | `event` (per trial) |
+| per-event summary | `num_events` | `mean`/`error` `(num_samples, num_events)` | `summary_event` |
+| bins | `num_bins` = Σ over events | `binned_mean`/`binned_error` `(num_samples, num_bins)` | `bin_event` |
+
+The bins need their own grain because GuPPy bins trials in fixed groups, so bin counts differ
+per event (fixture: 2 / 1 / 6) — ragged, handled by the same concatenate-plus-event-ref trick as
+the trials. `region`, `trace_type`, `baseline_corrected`, and `unit` stay object-level
+attributes/refs because they are constant within a condition.
+
+### The remaining lever
+
+If the count ever needs to fall further, the bounded axes are the only remaining knob, and they
+are cheap to consolidate because they produce **identically-shaped** arrays (no raggedness). For
+example, the `n_baselines` axis (corrected/uncorrected) could fold into a dimension rather than
+doubling PSTH objects. We have **not** done this — the bounded axes are small and splitting on
+them keeps each object semantically homogeneous and self-describing — but it is the lever that
+remains, now that the unbounded one is already handled.

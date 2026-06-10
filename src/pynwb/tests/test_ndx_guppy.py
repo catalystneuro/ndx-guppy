@@ -53,6 +53,14 @@ def build_events_table():
     return table
 
 
+def build_multi_events_table():
+    """A two-event registry for the event-bearing products, which concatenate across events."""
+    table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
+    table.add_row(event_name="port_entries", event_description="Port entry events", raw_store_name="PrtN")
+    table.add_row(event_name="rewarded_nose_pokes", event_description="Rewarded nose pokes", raw_store_name="LNRW")
+    return table
+
+
 @pytest.fixture
 def regions_table():
     return build_regions_table()
@@ -61,6 +69,11 @@ def regions_table():
 @pytest.fixture
 def events_table():
     return build_events_table()
+
+
+@pytest.fixture
+def multi_events_table():
+    return build_multi_events_table()
 
 
 @pytest.fixture
@@ -257,130 +270,162 @@ class TestGuppyTransientSummaryTable:
 
 
 class TestGuppyPSTH:
+    # One PSTH per (region, trace_type, baseline) condition, concatenated across events.
+    # Event 0 contributes 2 trials, event 1 contributes 1 trial -> 3 trials total; bins are 2 + 1.
     def _build(self, regions_table, events_table, binned=False):
         kwargs = dict(
-            name="psth_port_entries_dms_z_score",
+            name="psth_dms_z_score",
             trace_type="z_score",
             baseline_corrected=True,
             unit="a.u.",
             region=region_ref("region", [0], regions_table),
-            event=region_ref("event", [0], events_table),
+            event=region_ref("event", [0, 0, 1], events_table),  # per-trial
+            summary_event=region_ref("summary_event", [0, 1], events_table),  # per-event-column
             peri_event_time=np.linspace(-1.0, 2.0, 4),
             trial_onset_times=np.array([10.0, 20.0, 30.0]),
             traces=np.arange(12, dtype="float64").reshape(4, 3),  # (num_samples, num_trials)
-            mean=np.zeros(4),
-            error=np.zeros(4),
+            mean=np.arange(8, dtype="float64").reshape(4, 2),  # (num_samples, num_events)
+            error=np.zeros((4, 2)),
         )
         if binned:
             kwargs.update(
-                bin_edges=np.array([[0.0, 2.0], [2.0, 3.0]]),
+                bin_edges=np.array([[0.0, 3.0], [3.0, 4.0], [0.0, 2.0]]),  # 2 bins from event 0, 1 from event 1
                 bin_edges__bin_basis="trials",
-                binned_mean=np.zeros((4, 2)),
-                binned_error=np.zeros((4, 2)),
+                bin_event=region_ref("bin_event", [0, 0, 1], events_table),
+                binned_mean=np.zeros((4, 3)),
+                binned_error=np.zeros((4, 3)),
             )
         return GuppyPSTH(**kwargs)
 
-    def test_constructor(self, regions_table, events_table):
-        psth = self._build(regions_table, events_table)
+    def test_constructor(self, regions_table, multi_events_table):
+        psth = self._build(regions_table, multi_events_table)
         assert psth.traces.shape == (4, 3)  # time-first
         assert psth.trace_type == "z_score"
         assert psth.baseline_corrected is True
-        assert psth.event.table is events_table
+        assert psth.event.table is multi_events_table
+        assert list(psth.event.data) == [0, 0, 1]  # per-trial event membership
+        assert list(psth.summary_event.data) == [0, 1]
+        assert psth.mean.shape == (4, 2)  # one column per event
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, events_table, roundtrip):
+    def test_roundtrip(self, nwbfile, guppy_module, regions_table, multi_events_table, roundtrip):
         guppy_module.add(regions_table)
-        guppy_module.add(events_table)
-        guppy_module.add(self._build(regions_table, events_table, binned=True))
+        guppy_module.add(multi_events_table)
+        guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
-        read_psth = read.processing["guppy"]["psth_port_entries_dms_z_score"]
+        read_psth = read.processing["guppy"]["psth_dms_z_score"]
         np.testing.assert_array_equal(read_psth.traces[:], np.arange(12).reshape(4, 3))
+        np.testing.assert_array_equal(read_psth.mean[:], np.arange(8).reshape(4, 2))
         assert read_psth.traces.shape[0] == read_psth.peri_event_time.shape[0]
+        assert read_psth.traces.shape[1] == read_psth.trial_onset_times.shape[0]
+        assert list(read_psth.summary_event.data) == [0, 1]
         assert read_psth.bin_edges.attrs["bin_basis"] == "trials"
-        assert read_psth.binned_mean.shape == (4, 2)
+        assert read_psth.binned_mean.shape == (4, 3)
+        assert list(read_psth.bin_event.data) == [0, 0, 1]
 
 
 class TestGuppyCrossCorrelation:
-    def _build(self, regions_table, events_table):
-        return GuppyCrossCorrelation(
-            name="xcorr_port_entries_z_score_dms_dls",
+    # One cross-correlation per (trace_type, region-pair) condition, concatenated across events.
+    def _build(self, regions_table, events_table, binned=False):
+        kwargs = dict(
+            name="xcorr_z_score_dms_dls",
             trace_type="z_score",
             unit="a.u.",
             region=region_ref("region", [0, 1], regions_table),  # region_1, region_2
-            event=region_ref("event", [0], events_table),
+            event=region_ref("event", [0, 0, 1], events_table),  # per-trial
+            summary_event=region_ref("summary_event", [0, 1], events_table),
             lag=np.linspace(-1.0, 1.0, 5),
             trial_onset_times=np.array([10.0, 20.0, 30.0]),
             trials=np.arange(15, dtype="float64").reshape(5, 3),  # (num_lags, num_trials)
-            mean=np.zeros(5),
-            error=np.zeros(5),
+            mean=np.arange(10, dtype="float64").reshape(5, 2),  # (num_lags, num_events)
+            error=np.zeros((5, 2)),
         )
+        if binned:
+            kwargs.update(
+                bin_edges=np.array([[0.0, 3.0], [3.0, 4.0], [0.0, 2.0]]),
+                bin_edges__bin_basis="trials",
+                bin_event=region_ref("bin_event", [0, 0, 1], events_table),
+                binned_mean=np.zeros((5, 3)),
+                binned_error=np.zeros((5, 3)),
+            )
+        return GuppyCrossCorrelation(**kwargs)
 
-    def test_constructor(self, regions_table, events_table):
-        xcorr = self._build(regions_table, events_table)
+    def test_constructor(self, regions_table, multi_events_table):
+        xcorr = self._build(regions_table, multi_events_table)
         assert xcorr.trials.shape == (5, 3)  # lag-first
         assert list(xcorr.region.data) == [0, 1]
+        assert list(xcorr.event.data) == [0, 0, 1]
+        assert xcorr.mean.shape == (5, 2)
         np.testing.assert_array_equal(xcorr.trial_onset_times, [10.0, 20.0, 30.0])
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, events_table, roundtrip):
+    def test_roundtrip(self, nwbfile, guppy_module, regions_table, multi_events_table, roundtrip):
         guppy_module.add(regions_table)
-        guppy_module.add(events_table)
-        guppy_module.add(self._build(regions_table, events_table))
+        guppy_module.add(multi_events_table)
+        guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
-        read_xcorr = read.processing["guppy"]["xcorr_port_entries_z_score_dms_dls"]
+        read_xcorr = read.processing["guppy"]["xcorr_z_score_dms_dls"]
         np.testing.assert_array_equal(read_xcorr.trials[:], np.arange(15).reshape(5, 3))
+        np.testing.assert_array_equal(read_xcorr.mean[:], np.arange(10).reshape(5, 2))
         assert read_xcorr.trials.shape[0] == read_xcorr.lag.shape[0]
         assert read_xcorr.trials.shape[1] == read_xcorr.trial_onset_times.shape[0]
         assert list(read_xcorr.region.data) == [0, 1]
+        assert list(read_xcorr.bin_event.data) == [0, 0, 1]
 
 
 class TestGuppyPeakAUC:
+    # One peak/AUC per (region, trace_type) condition, concatenated across events.
+    # 2 windows; event 0 contributes 2 trials, event 1 contributes 1 trial -> 3 trials; bins 2 + 1.
     def _build(self, regions_table, events_table, binned=False):
-        # 2 windows x 3 trials
         kwargs = dict(
-            name="peak_auc_port_entries_dms_z_score",
+            name="peak_auc_dms_z_score",
             trace_type="z_score",
             unit="a.u.",
             region=region_ref("region", [0], regions_table),
-            event=region_ref("event", [0], events_table),
+            event=region_ref("event", [0, 0, 1], events_table),  # per-trial
+            summary_event=region_ref("summary_event", [0, 1], events_table),
             window_start=np.array([-5.0, 0.0]),
             window_stop=np.array([0.0, 3.0]),
             trial_onset_times=np.array([10.0, 20.0, 30.0]),
             peak_positive=np.arange(6, dtype="float64").reshape(2, 3),  # (num_windows, num_trials)
             peak_negative=-np.arange(6, dtype="float64").reshape(2, 3),
             area_under_curve=np.arange(6, dtype="float64").reshape(2, 3) * 0.5,
-            mean_peak_positive=np.array([2.0, 3.0]),
-            mean_peak_negative=np.array([-1.0, -0.5]),
-            mean_area_under_curve=np.array([1.0, 1.5]),
+            mean_peak_positive=np.array([[2.0, 4.0], [3.0, 5.0]]),  # (num_windows, num_events)
+            mean_peak_negative=np.array([[-1.0, -2.0], [-0.5, -1.5]]),
+            mean_area_under_curve=np.array([[1.0, 2.0], [1.5, 2.5]]),
         )
         if binned:
             kwargs.update(
-                bin_edges=np.array([[0.0, 2.0], [2.0, 3.0]]),
+                bin_edges=np.array([[0.0, 3.0], [3.0, 4.0], [0.0, 2.0]]),
                 bin_edges__bin_basis="trials",
-                binned_peak_positive=np.zeros((2, 2)),
-                binned_peak_negative=np.zeros((2, 2)),
-                binned_area_under_curve=np.zeros((2, 2)),
+                bin_event=region_ref("bin_event", [0, 0, 1], events_table),
+                binned_peak_positive=np.zeros((2, 3)),
+                binned_peak_negative=np.zeros((2, 3)),
+                binned_area_under_curve=np.zeros((2, 3)),
             )
         return GuppyPeakAUC(**kwargs)
 
-    def test_constructor(self, regions_table, events_table):
-        peak_auc = self._build(regions_table, events_table)
+    def test_constructor(self, regions_table, multi_events_table):
+        peak_auc = self._build(regions_table, multi_events_table)
         assert peak_auc.trace_type == "z_score"
         assert peak_auc.peak_positive.shape == (2, 3)  # (num_windows, num_trials)
-        np.testing.assert_array_equal(peak_auc.mean_peak_positive, [2.0, 3.0])
-        assert peak_auc.event.table is events_table
+        assert peak_auc.mean_peak_positive.shape == (2, 2)  # (num_windows, num_events)
+        np.testing.assert_array_equal(peak_auc.mean_peak_positive, [[2.0, 4.0], [3.0, 5.0]])
+        assert list(peak_auc.event.data) == [0, 0, 1]
+        assert peak_auc.event.table is multi_events_table
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, events_table, roundtrip):
+    def test_roundtrip(self, nwbfile, guppy_module, regions_table, multi_events_table, roundtrip):
         guppy_module.add(regions_table)
-        guppy_module.add(events_table)
-        guppy_module.add(self._build(regions_table, events_table, binned=True))
+        guppy_module.add(multi_events_table)
+        guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
-        read_peak_auc = read.processing["guppy"]["peak_auc_port_entries_dms_z_score"]
+        read_peak_auc = read.processing["guppy"]["peak_auc_dms_z_score"]
         np.testing.assert_array_equal(read_peak_auc.peak_positive[:], np.arange(6).reshape(2, 3))
         assert read_peak_auc.peak_positive.shape[0] == read_peak_auc.window_start.shape[0]
         assert read_peak_auc.peak_positive.shape[1] == read_peak_auc.trial_onset_times.shape[0]
-        np.testing.assert_array_equal(read_peak_auc.mean_area_under_curve[:], [1.0, 1.5])
+        np.testing.assert_array_equal(read_peak_auc.mean_area_under_curve[:], [[1.0, 2.0], [1.5, 2.5]])
+        assert list(read_peak_auc.summary_event.data) == [0, 1]
         assert read_peak_auc.bin_edges.attrs["bin_basis"] == "trials"
-        assert read_peak_auc.binned_peak_positive.shape == (2, 2)
-        assert read_peak_auc.event.data[0] == 0
+        assert read_peak_auc.binned_peak_positive.shape == (2, 3)
+        assert list(read_peak_auc.bin_event.data) == [0, 0, 1]
 
 
 class TestGuppyValidSignalIntervals:
