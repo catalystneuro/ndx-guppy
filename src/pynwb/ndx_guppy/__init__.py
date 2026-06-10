@@ -9,18 +9,42 @@ __spec_path = __location_of_this_file / "spec" / "ndx-guppy.namespace.yaml"
 if not __spec_path.exists():
     __spec_path = __location_of_this_file.parent.parent.parent / "spec" / "ndx-guppy.namespace.yaml"
 
+# ndx-fiber-photometry must be imported so its types are registered before loading ndx-guppy,
+# since GuppyDerivedResponseSeries extends FiberPhotometryResponseSeries.
+import ndx_fiber_photometry  # noqa: F401
+
 # Load the namespace
 load_namespaces(str(__spec_path))
 
-# TODO: Define your classes here to make them accessible at the package level.
-# Either have PyNWB generate a class from the spec using `get_class` as shown
-# below or write a custom class and register it using the class decorator
-# `@register_class("TetrodeSeries", "ndx-guppy")`
-TetrodeSeries = get_class("TetrodeSeries", "ndx-guppy")
+# Registries
+GuppyRegionsTable = get_class("GuppyRegionsTable", "ndx-guppy")
+GuppyEventsTable = get_class("GuppyEventsTable", "ndx-guppy")
 
-# TODO: Add all classes to __all__ to make them accessible at the package level
+# Derived traces
+GuppyDerivedResponseSeries = get_class("GuppyDerivedResponseSeries", "ndx-guppy")
+
+# Analysis products
+GuppyTransientsTable = get_class("GuppyTransientsTable", "ndx-guppy")
+GuppyTransientSummaryTable = get_class("GuppyTransientSummaryTable", "ndx-guppy")
+GuppyPSTH = get_class("GuppyPSTH", "ndx-guppy")
+GuppyCrossCorrelation = get_class("GuppyCrossCorrelation", "ndx-guppy")
+GuppyPeakAUC = get_class("GuppyPeakAUC", "ndx-guppy")
+GuppyValidSignalIntervals = get_class("GuppyValidSignalIntervals", "ndx-guppy")
+
+# Parameters
+GuppyParameters = get_class("GuppyParameters", "ndx-guppy")
+
 __all__ = [
-    "TetrodeSeries",
+    "GuppyRegionsTable",
+    "GuppyEventsTable",
+    "GuppyDerivedResponseSeries",
+    "GuppyTransientsTable",
+    "GuppyTransientSummaryTable",
+    "GuppyPSTH",
+    "GuppyCrossCorrelation",
+    "GuppyPeakAUC",
+    "GuppyValidSignalIntervals",
+    "GuppyParameters",
 ]
 
 # Remove these functions/modules from the package

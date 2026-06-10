@@ -1,9 +1,456 @@
 groups:
-- neurodata_type_def: TetrodeSeries
-  neurodata_type_inc: ElectricalSeries
-  doc: An extension of ElectricalSeries to include the tetrode ID for each time 
-    series.
+- neurodata_type_def: GuppyRegionsTable
+  neurodata_type_inc: DynamicTable
+  doc: Registry of GuPPy logical regions (one row per region, e.g. 'dms'). A 
+    GuPPy region is a processing-level entity -- a signal+isosbestic pair 
+    collapsed into one derived signal -- so it is the canonical region identity 
+    that GuPPy products reference.
+  datasets:
+  - name: region
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: The semantic region name from storesList.csv (e.g. 'dms'). The region's
+      identity.
+  - name: raw_store_name
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: Optional raw acquisition channel/store name from storesList.csv (e.g. 
+      'Dv2A').
+    quantity: '?'
+  - name: fiber_photometry_table_region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Optional ragged reference into the acquisition FiberPhotometryTable 
+      (the signal + isosbestic fiber rows for this region). Absorbs the 
+      signal/control many-to-one mapping once, here, so products reference a 
+      single region row. Anatomical location is reached through this link (the 
+      fiber's 'location'), not duplicated.
+    quantity: '?'
+  - name: fiber_photometry_table_region_index
+    neurodata_type_inc: VectorIndex
+    doc: Ragged index for fiber_photometry_table_region (multiple fiber rows per
+      region).
+    quantity: '?'
+- neurodata_type_def: GuppyEventsTable
+  neurodata_type_inc: DynamicTable
+  doc: Registry of behavioral events GuPPy aligned to (one row per event, e.g. 
+    'port_entries'). The canonical event identity that GuPPy peri-event products
+    reference.
+  datasets:
+  - name: event_name
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: The semantic event name from storesList.csv (e.g. 'port_entries').
+  - name: event_description
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: Human-readable description of the event.
+  - name: raw_store_name
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: Optional raw acquisition channel/store name from storesList.csv (e.g. 
+      'PrtN').
+    quantity: '?'
+  - name: events
+    neurodata_type_inc: VectorData
+    dtype:
+      target_type: NWBDataInterface
+      reftype: object
+    doc: Optional object reference to the behavioral-event object holding this 
+      event's onset timestamps (e.g. an ndx_events.Events object in the behavior
+      module). Kept as a generic object reference so ndx-guppy takes no hard 
+      dependency on ndx-events.
+    quantity: '?'
+- neurodata_type_def: GuppyDerivedResponseSeries
+  neurodata_type_inc: FiberPhotometryResponseSeries
+  doc: A GuPPy-derived continuous trace (control_fit, dff, or z_score) for one 
+    region. Extends FiberPhotometryResponseSeries to stamp the trace_type and to
+    reference the GuPPy regions registry; the inherited 
+    fiber_photometry_table_region still carries the physical signal+isosbestic 
+    fiber provenance.
   attributes:
-  - name: trode_id
+  - name: trace_type
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRegionsTable row for this trace's region (single 
+      row).
+- neurodata_type_def: GuppyTransientsTable
+  neurodata_type_inc: DynamicTable
+  doc: GuPPy-detected transient peaks for one (region, trace_type).
+  attributes:
+  - name: trace_type
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: unit
+    dtype: text
+    doc: Unit of the amplitude (matches the trace_type).
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRegionsTable row for this table's region (single 
+      row).
+  - name: timestamp
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Timestamp of the detected transient peak (seconds, session clock).
+  - name: amplitude
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Trace value at the detected transient peak.
+- neurodata_type_def: GuppyTransientSummaryTable
+  neurodata_type_inc: DynamicTable
+  doc: 'Per-session GuPPy transient summary: one row per (region, trace_type) with
+    event frequency and mean peak amplitude. region and trace_type vary per row, so
+    they are columns.'
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRegionsTable row for this summary row's region.
+  - name: trace_type
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: frequency_per_min
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Transient frequency in events per minute.
+  - name: mean_amplitude
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Mean amplitude of the detected transient peaks.
+- neurodata_type_def: GuppyPSTH
+  neurodata_type_inc: NWBDataInterface
+  doc: Peri-event PSTH for one (event, region, trace_type), stored as a natural 
+    samples-by-trials matrix. The baseline-uncorrected variant is a second 
+    GuppyPSTH with baseline_corrected=False.
+  attributes:
+  - name: trace_type
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: baseline_corrected
+    dtype: bool
+    doc: Whether per-trial baseline correction was applied.
+  - name: unit
+    dtype: text
+    doc: Unit of the PSTH values (matches the trace_type).
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRegionsTable row for this PSTH's region (single 
+      row).
+  - name: event
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyEventsTable row for this PSTH's event (single 
+      row).
+  - name: peri_event_time
+    dtype: float64
+    dims:
+    - num_samples
+    shape:
+    - null
+    doc: Peri-event time axis in seconds (relative to event onset), shape 
+      (num_samples,).
+  - name: trial_onset_times
+    dtype: float64
+    dims:
+    - num_trials
+    shape:
+    - null
+    doc: Absolute onset time of each trial in seconds (session clock), shape 
+      (num_trials,).
+  - name: traces
+    dtype: float64
+    dims:
+    - num_samples
+    - num_trials
+    shape:
+    - null
+    - null
+    doc: Per-trial response, shape (num_samples, num_trials). Time is the first 
+      axis.
+  - name: mean
+    dtype: float64
+    dims:
+    - num_samples
+    shape:
+    - null
+    doc: Across-trial mean at each peri-event time, shape (num_samples,).
+  - name: error
+    dtype: float64
+    dims:
+    - num_samples
+    shape:
+    - null
+    doc: Across-trial error (e.g. SEM) at each peri-event time, shape 
+      (num_samples,).
+  - name: bin_edges
+    dtype: float64
+    dims:
+    - num_bins
+    - start_stop
+    shape:
+    - null
+    - 2
+    doc: Optional bin definitions, shape (num_bins, 2). Each row is [start, 
+      stop); interpreted as trial-index ranges or time ranges according to the 
+      bin_basis attribute.
+    quantity: '?'
+    attributes:
+    - name: bin_basis
+      dtype: text
+      doc: Whether bins are defined over 'trials' or 'time'.
+  - name: binned_mean
+    dtype: float64
+    dims:
+    - num_samples
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin mean, shape (num_samples, num_bins).
+    quantity: '?'
+  - name: binned_error
+    dtype: float64
+    dims:
+    - num_samples
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin error, shape (num_samples, num_bins).
+    quantity: '?'
+- neurodata_type_def: GuppyCrossCorrelation
+  neurodata_type_inc: NWBDataInterface
+  doc: Peri-event cross-correlation for one (event, trace_type, region-pair), 
+    stored as a samples-by-trials matrix over a lag axis. The region reference 
+    points at two rows (region_1, region_2).
+  attributes:
+  - name: trace_type
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: unit
+    dtype: text
+    doc: Unit of the cross-correlation values (normalized; typically 'a.u.').
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the two GuppyRegionsTable rows (region_1, region_2) for 
+      this cross-correlation.
+  - name: event
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyEventsTable row for this cross-correlation's 
+      event (single row).
+  - name: lag
+    dtype: float64
+    dims:
+    - num_lags
+    shape:
+    - null
+    doc: Lag axis in seconds (symmetric around zero), shape (num_lags,).
+  - name: trials
+    dtype: float64
+    dims:
+    - num_lags
+    - num_trials
+    shape:
+    - null
+    - null
+    doc: Per-trial cross-correlation, shape (num_lags, num_trials). Lag is the 
+      first axis.
+  - name: mean
+    dtype: float64
+    dims:
+    - num_lags
+    shape:
+    - null
+    doc: Across-trial mean cross-correlation at each lag, shape (num_lags,).
+  - name: error
+    dtype: float64
+    dims:
+    - num_lags
+    shape:
+    - null
+    doc: Across-trial error at each lag, shape (num_lags,).
+  - name: bin_edges
+    dtype: float64
+    dims:
+    - num_bins
+    - start_stop
+    shape:
+    - null
+    - 2
+    doc: Optional bin definitions, shape (num_bins, 2). Each row is [start, 
+      stop); interpreted as trial-index ranges or time ranges according to the 
+      bin_basis attribute.
+    quantity: '?'
+    attributes:
+    - name: bin_basis
+      dtype: text
+      doc: Whether bins are defined over 'trials' or 'time'.
+  - name: binned_mean
+    dtype: float64
+    dims:
+    - num_lags
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin mean, shape (num_lags, num_bins).
+    quantity: '?'
+  - name: binned_error
+    dtype: float64
+    dims:
+    - num_lags
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin error, shape (num_lags, num_bins).
+    quantity: '?'
+- neurodata_type_def: GuppyPeakAUC
+  neurodata_type_inc: DynamicTable
+  doc: Peak and area-under-curve summary of a peri-event PSTH for one (event, 
+    region, trace_type); one row per peak window.
+  attributes:
+  - name: trace_type
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: unit
+    dtype: text
+    doc: Unit of the peak/area values (matches the trace_type).
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRegionsTable row for this summary's region 
+      (single row).
+  - name: event
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyEventsTable row for this summary's event (single 
+      row).
+  - name: window_start
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Start of the peak window in seconds (relative to event onset).
+  - name: window_stop
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Stop of the peak window in seconds (relative to event onset).
+  - name: peak_positive
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Maximum value of the PSTH mean within the window.
+  - name: peak_negative
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Minimum value of the PSTH mean within the window.
+  - name: area_under_curve
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Area under the PSTH mean within the window (trapezoidal).
+- neurodata_type_def: GuppyValidSignalIntervals
+  neurodata_type_inc: TimeIntervals
+  doc: Time intervals retained as valid signal (not removed as artifacts) during
+    GuPPy preprocessing, with a structured region reference per interval.
+  datasets:
+  - name: region
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRegionsTable row the interval applies to.
+- neurodata_type_def: GuppyParameters
+  neurodata_type_inc: LabMetaData
+  doc: Typed GuPPy processing parameters for the session (from 
+    GuPPyParamtersUsed.json). One per session; applies to the co-located GuPPy 
+    products.
+  attributes:
+  - name: guppy_version
+    dtype: text
+    doc: GuPPy version string.
+    required: false
+  - name: zscore_method
+    dtype: text
+    doc: Z-score computation method.
+    required: false
+  - name: baseline_window_start
+    dtype: float64
+    doc: Baseline window start (seconds) for normalization.
+    required: false
+  - name: baseline_window_end
+    dtype: float64
+    doc: Baseline window end (seconds) for normalization.
+    required: false
+  - name: filter_window
+    dtype: float64
+    doc: Filtering window used for the control fit.
+    required: false
+  - name: isosbestic_control
+    dtype: bool
+    doc: Whether an isosbestic control channel was used (vs a synthetic fit).
+    required: false
+  - name: remove_artifacts
+    dtype: bool
+    doc: Whether artifact removal was performed.
+    required: false
+  - name: artifacts_removal_method
+    dtype: text
+    doc: Artifact removal method (e.g. 'concatenate' or 'replace with NaN').
+    required: false
+  - name: transients_thresh
+    dtype: float64
+    doc: Transient detection threshold.
+    required: false
+  - name: high_amp_filt
+    dtype: float64
+    doc: High-amplitude filter for transient detection.
+    required: false
+  - name: moving_window
+    dtype: float64
+    doc: Moving window for transient detection.
+    required: false
+  - name: n_sec_prev
+    dtype: float64
+    doc: Seconds before event onset for PSTH windows.
+    required: false
+  - name: n_sec_post
+    dtype: float64
+    doc: Seconds after event onset for PSTH windows.
+    required: false
+  - name: time_interval
+    dtype: float64
+    doc: Minimum inter-event interval for PSTH trial inclusion (seconds).
+    required: false
+  - name: bin_psth_trials
     dtype: int32
-    doc: The tetrode ID.
+    doc: Number of trials per PSTH bin (0 if unbinned).
+    required: false
+  - name: baseline_correction_start
+    dtype: float64
+    doc: PSTH baseline-correction window start (seconds).
+    required: false
+  - name: baseline_correction_end
+    dtype: float64
+    doc: PSTH baseline-correction window end (seconds).
+    required: false
+  datasets:
+  - name: peak_start_points
+    dtype: float64
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Optional peak/AUC window start points (seconds), shape (num_windows,).
+    quantity: '?'
+  - name: peak_end_points
+    dtype: float64
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Optional peak/AUC window end points (seconds), shape (num_windows,).
+    quantity: '?'

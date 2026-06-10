@@ -7,5 +7,6 @@ namespaces:
   name: ndx-guppy
   schema:
   - namespace: core
+  - namespace: ndx-fiber-photometry
   - source: ndx-guppy.extensions.yaml
   version: 0.1.0
