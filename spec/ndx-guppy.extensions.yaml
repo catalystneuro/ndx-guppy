@@ -254,6 +254,14 @@ groups:
     shape:
     - null
     doc: Lag axis in seconds (symmetric around zero), shape (num_lags,).
+  - name: trial_onset_times
+    dtype: float64
+    dims:
+    - num_trials
+    shape:
+    - null
+    doc: Absolute onset time of each trial in seconds (session clock), shape 
+      (num_trials,).
   - name: trials
     dtype: float64
     dims:
@@ -315,9 +323,12 @@ groups:
     doc: Optional per-bin error, shape (num_lags, num_bins).
     quantity: '?'
 - neurodata_type_def: GuppyPeakAUC
-  neurodata_type_inc: DynamicTable
+  neurodata_type_inc: NWBDataInterface
   doc: Peak and area-under-curve summary of a peri-event PSTH for one (event, 
-    region, trace_type); one row per peak window.
+    region, trace_type). GuPPy computes peak_positive, peak_negative, and area 
+    for every trial, every bin, and the across-trial mean within each peak 
+    window, so this is a (num_windows, ...) matrix per metric rather than a 
+    single row.
   attributes:
   - name: trace_type
     dtype: text
@@ -336,25 +347,130 @@ groups:
     doc: Reference to the GuppyEventsTable row for this summary's event (single 
       row).
   - name: window_start
-    neurodata_type_inc: VectorData
     dtype: float64
-    doc: Start of the peak window in seconds (relative to event onset).
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Start of each peak window in seconds (relative to event onset), shape 
+      (num_windows,).
   - name: window_stop
-    neurodata_type_inc: VectorData
     dtype: float64
-    doc: Stop of the peak window in seconds (relative to event onset).
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Stop of each peak window in seconds (relative to event onset), shape 
+      (num_windows,).
+  - name: trial_onset_times
+    dtype: float64
+    dims:
+    - num_trials
+    shape:
+    - null
+    doc: Absolute onset time of each trial in seconds (session clock), shape 
+      (num_trials,).
   - name: peak_positive
-    neurodata_type_inc: VectorData
     dtype: float64
-    doc: Maximum value of the PSTH mean within the window.
+    dims:
+    - num_windows
+    - num_trials
+    shape:
+    - null
+    - null
+    doc: Per-trial maximum within each window, shape (num_windows, num_trials).
   - name: peak_negative
-    neurodata_type_inc: VectorData
     dtype: float64
-    doc: Minimum value of the PSTH mean within the window.
+    dims:
+    - num_windows
+    - num_trials
+    shape:
+    - null
+    - null
+    doc: Per-trial minimum within each window, shape (num_windows, num_trials).
   - name: area_under_curve
-    neurodata_type_inc: VectorData
     dtype: float64
-    doc: Area under the PSTH mean within the window (trapezoidal).
+    dims:
+    - num_windows
+    - num_trials
+    shape:
+    - null
+    - null
+    doc: Per-trial area within each window (trapezoidal), shape (num_windows, 
+      num_trials).
+  - name: mean_peak_positive
+    dtype: float64
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Across-trial-mean trace maximum within each window, shape 
+      (num_windows,).
+  - name: mean_peak_negative
+    dtype: float64
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Across-trial-mean trace minimum within each window, shape 
+      (num_windows,).
+  - name: mean_area_under_curve
+    dtype: float64
+    dims:
+    - num_windows
+    shape:
+    - null
+    doc: Across-trial-mean trace area within each window (trapezoidal), shape 
+      (num_windows,).
+  - name: bin_edges
+    dtype: float64
+    dims:
+    - num_bins
+    - start_stop
+    shape:
+    - null
+    - 2
+    doc: Optional bin definitions, shape (num_bins, 2). Each row is [start, 
+      stop); interpreted as trial-index ranges or time ranges according to the 
+      bin_basis attribute.
+    quantity: '?'
+    attributes:
+    - name: bin_basis
+      dtype: text
+      doc: Whether bins are defined over 'trials' or 'time'.
+  - name: binned_peak_positive
+    dtype: float64
+    dims:
+    - num_windows
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin (binned-mean trace) maximum within each window, shape 
+      (num_windows, num_bins).
+    quantity: '?'
+  - name: binned_peak_negative
+    dtype: float64
+    dims:
+    - num_windows
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin (binned-mean trace) minimum within each window, shape 
+      (num_windows, num_bins).
+    quantity: '?'
+  - name: binned_area_under_curve
+    dtype: float64
+    dims:
+    - num_windows
+    - num_bins
+    shape:
+    - null
+    - null
+    doc: Optional per-bin (binned-mean trace) area within each window, shape 
+      (num_windows, num_bins).
+    quantity: '?'
 - neurodata_type_def: GuppyValidSignalIntervals
   neurodata_type_inc: TimeIntervals
   doc: Time intervals retained as valid signal (not removed as artifacts) during

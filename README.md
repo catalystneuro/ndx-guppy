@@ -52,8 +52,10 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
 - **`GuppyCrossCorrelation`** (extends `NWBDataInterface`) — peri-event cross-correlation for one
   (event, trace_type, region-pair), stored as a `(num_lags, num_trials)` matrix with `mean`/`error` and
   optional binning.
-- **`GuppyPeakAUC`** (extends `DynamicTable`) — peak and area-under-curve summary of a PSTH for one
-  (event, region, trace_type); one row per peak window.
+- **`GuppyPeakAUC`** (extends `NWBDataInterface`) — peak/area summary of a PSTH for one
+  (event, region, trace_type). GuPPy computes `peak_positive`/`peak_negative`/`area_under_curve`
+  for every trial, every bin, and the across-trial mean within each peak window, so each metric is
+  a `(num_windows, num_trials)` matrix plus a per-window mean (and optional per-bin) value.
 - **`GuppyValidSignalIntervals`** (extends `TimeIntervals`) — artifact-free valid-signal windows with a
   structured `region` reference per interval.
 
@@ -254,12 +256,15 @@ classDiagram
         attribute trace_type, unit : text
         DynamicTableRegion region, event
         dataset trials (num_lags, num_trials)
+        dataset trial_onset_times (num_trials)
     }
     class GuppyPeakAUC {
         <<ndx-guppy>>
         --
         attribute trace_type, unit : text
         DynamicTableRegion region, event
+        dataset peak_positive (num_windows, num_trials)
+        dataset mean_peak_positive (num_windows)
     }
     class GuppyValidSignalIntervals {
         <<ndx-guppy>>

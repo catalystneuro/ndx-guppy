@@ -352,6 +352,13 @@ def main():
                 dims=("num_lags",),
             ),
             NWBDatasetSpec(
+                name="trial_onset_times",
+                doc="Absolute onset time of each trial in seconds (session clock), shape (num_trials,).",
+                dtype="float64",
+                shape=(None,),
+                dims=("num_trials",),
+            ),
+            NWBDatasetSpec(
                 name="trials",
                 doc="Per-trial cross-correlation, shape (num_lags, num_trials). Lag is the first axis.",
                 dtype="float64",
@@ -411,49 +418,122 @@ def main():
 
     guppy_peak_auc = NWBGroupSpec(
         neurodata_type_def="GuppyPeakAUC",
-        neurodata_type_inc="DynamicTable",
+        neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peak and area-under-curve summary of a peri-event PSTH for one (event, region, trace_type); "
-            "one row per peak window."
+            "Peak and area-under-curve summary of a peri-event PSTH for one (event, region, trace_type). "
+            "GuPPy computes peak_positive, peak_negative, and area for every trial, every bin, and the "
+            "across-trial mean within each peak window, so this is a (num_windows, ...) matrix per metric "
+            "rather than a single row."
         ),
         attributes=[
             trace_type_attr(),
-            NWBAttributeSpec(
-                name="unit", doc="Unit of the peak/area values (matches the trace_type).", dtype="text"
-            ),
+            NWBAttributeSpec(name="unit", doc="Unit of the peak/area values (matches the trace_type).", dtype="text"),
         ],
         datasets=[
             region_region(doc="Reference to the GuppyRegionsTable row for this summary's region (single row)."),
             event_region(doc="Reference to the GuppyEventsTable row for this summary's event (single row)."),
             NWBDatasetSpec(
                 name="window_start",
-                neurodata_type_inc="VectorData",
-                doc="Start of the peak window in seconds (relative to event onset).",
+                doc="Start of each peak window in seconds (relative to event onset), shape (num_windows,).",
                 dtype="float64",
+                shape=(None,),
+                dims=("num_windows",),
             ),
             NWBDatasetSpec(
                 name="window_stop",
-                neurodata_type_inc="VectorData",
-                doc="Stop of the peak window in seconds (relative to event onset).",
+                doc="Stop of each peak window in seconds (relative to event onset), shape (num_windows,).",
                 dtype="float64",
+                shape=(None,),
+                dims=("num_windows",),
+            ),
+            NWBDatasetSpec(
+                name="trial_onset_times",
+                doc="Absolute onset time of each trial in seconds (session clock), shape (num_trials,).",
+                dtype="float64",
+                shape=(None,),
+                dims=("num_trials",),
             ),
             NWBDatasetSpec(
                 name="peak_positive",
-                neurodata_type_inc="VectorData",
-                doc="Maximum value of the PSTH mean within the window.",
+                doc="Per-trial maximum within each window, shape (num_windows, num_trials).",
                 dtype="float64",
+                shape=(None, None),
+                dims=("num_windows", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="peak_negative",
-                neurodata_type_inc="VectorData",
-                doc="Minimum value of the PSTH mean within the window.",
+                doc="Per-trial minimum within each window, shape (num_windows, num_trials).",
                 dtype="float64",
+                shape=(None, None),
+                dims=("num_windows", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="area_under_curve",
-                neurodata_type_inc="VectorData",
-                doc="Area under the PSTH mean within the window (trapezoidal).",
+                doc="Per-trial area within each window (trapezoidal), shape (num_windows, num_trials).",
                 dtype="float64",
+                shape=(None, None),
+                dims=("num_windows", "num_trials"),
+            ),
+            NWBDatasetSpec(
+                name="mean_peak_positive",
+                doc="Across-trial-mean trace maximum within each window, shape (num_windows,).",
+                dtype="float64",
+                shape=(None,),
+                dims=("num_windows",),
+            ),
+            NWBDatasetSpec(
+                name="mean_peak_negative",
+                doc="Across-trial-mean trace minimum within each window, shape (num_windows,).",
+                dtype="float64",
+                shape=(None,),
+                dims=("num_windows",),
+            ),
+            NWBDatasetSpec(
+                name="mean_area_under_curve",
+                doc="Across-trial-mean trace area within each window (trapezoidal), shape (num_windows,).",
+                dtype="float64",
+                shape=(None,),
+                dims=("num_windows",),
+            ),
+            NWBDatasetSpec(
+                name="bin_edges",
+                doc=(
+                    "Optional bin definitions, shape (num_bins, 2). Each row is [start, stop); interpreted as "
+                    "trial-index ranges or time ranges according to the bin_basis attribute."
+                ),
+                dtype="float64",
+                shape=(None, 2),
+                dims=("num_bins", "start_stop"),
+                quantity="?",
+                attributes=[
+                    NWBAttributeSpec(
+                        name="bin_basis", doc="Whether bins are defined over 'trials' or 'time'.", dtype="text"
+                    )
+                ],
+            ),
+            NWBDatasetSpec(
+                name="binned_peak_positive",
+                doc="Optional per-bin (binned-mean trace) maximum within each window, shape (num_windows, num_bins).",
+                dtype="float64",
+                shape=(None, None),
+                dims=("num_windows", "num_bins"),
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="binned_peak_negative",
+                doc="Optional per-bin (binned-mean trace) minimum within each window, shape (num_windows, num_bins).",
+                dtype="float64",
+                shape=(None, None),
+                dims=("num_windows", "num_bins"),
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="binned_area_under_curve",
+                doc="Optional per-bin (binned-mean trace) area within each window, shape (num_windows, num_bins).",
+                dtype="float64",
+                shape=(None, None),
+                dims=("num_windows", "num_bins"),
+                quantity="?",
             ),
         ],
     )

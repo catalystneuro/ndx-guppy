@@ -308,6 +308,7 @@ class TestGuppyCrossCorrelation:
             region=region_ref("region", [0, 1], regions_table),  # region_1, region_2
             event=region_ref("event", [0], events_table),
             lag=np.linspace(-1.0, 1.0, 5),
+            trial_onset_times=np.array([10.0, 20.0, 30.0]),
             trials=np.arange(15, dtype="float64").reshape(5, 3),  # (num_lags, num_trials)
             mean=np.zeros(5),
             error=np.zeros(5),
@@ -317,6 +318,7 @@ class TestGuppyCrossCorrelation:
         xcorr = self._build(regions_table, events_table)
         assert xcorr.trials.shape == (5, 3)  # lag-first
         assert list(xcorr.region.data) == [0, 1]
+        np.testing.assert_array_equal(xcorr.trial_onset_times, [10.0, 20.0, 30.0])
 
     def test_roundtrip(self, nwbfile, guppy_module, regions_table, events_table, roundtrip):
         guppy_module.add(regions_table)
@@ -326,44 +328,59 @@ class TestGuppyCrossCorrelation:
         read_xcorr = read.processing["guppy"]["xcorr_port_entries_z_score_dms_dls"]
         np.testing.assert_array_equal(read_xcorr.trials[:], np.arange(15).reshape(5, 3))
         assert read_xcorr.trials.shape[0] == read_xcorr.lag.shape[0]
+        assert read_xcorr.trials.shape[1] == read_xcorr.trial_onset_times.shape[0]
         assert list(read_xcorr.region.data) == [0, 1]
 
 
 class TestGuppyPeakAUC:
-    def test_constructor(self, regions_table, events_table):
-        table = GuppyPeakAUC(
+    def _build(self, regions_table, events_table, binned=False):
+        # 2 windows x 3 trials
+        kwargs = dict(
             name="peak_auc_port_entries_dms_z_score",
-            description="peak/AUC summary",
             trace_type="z_score",
             unit="a.u.",
-            target_tables={"region": regions_table, "event": events_table},
+            region=region_ref("region", [0], regions_table),
+            event=region_ref("event", [0], events_table),
+            window_start=np.array([-5.0, 0.0]),
+            window_stop=np.array([0.0, 3.0]),
+            trial_onset_times=np.array([10.0, 20.0, 30.0]),
+            peak_positive=np.arange(6, dtype="float64").reshape(2, 3),  # (num_windows, num_trials)
+            peak_negative=-np.arange(6, dtype="float64").reshape(2, 3),
+            area_under_curve=np.arange(6, dtype="float64").reshape(2, 3) * 0.5,
+            mean_peak_positive=np.array([2.0, 3.0]),
+            mean_peak_negative=np.array([-1.0, -0.5]),
+            mean_area_under_curve=np.array([1.0, 1.5]),
         )
-        table.add_row(
-            region=0, event=0, window_start=0.0, window_stop=1.0, peak_positive=2.5, peak_negative=-0.3,
-            area_under_curve=1.2,
-        )
-        np.testing.assert_array_equal(table["peak_positive"].data, [2.5])
-        assert table.trace_type == "z_score"
+        if binned:
+            kwargs.update(
+                bin_edges=np.array([[0.0, 2.0], [2.0, 3.0]]),
+                bin_edges__bin_basis="trials",
+                binned_peak_positive=np.zeros((2, 2)),
+                binned_peak_negative=np.zeros((2, 2)),
+                binned_area_under_curve=np.zeros((2, 2)),
+            )
+        return GuppyPeakAUC(**kwargs)
+
+    def test_constructor(self, regions_table, events_table):
+        peak_auc = self._build(regions_table, events_table)
+        assert peak_auc.trace_type == "z_score"
+        assert peak_auc.peak_positive.shape == (2, 3)  # (num_windows, num_trials)
+        np.testing.assert_array_equal(peak_auc.mean_peak_positive, [2.0, 3.0])
+        assert peak_auc.event.table is events_table
 
     def test_roundtrip(self, nwbfile, guppy_module, regions_table, events_table, roundtrip):
         guppy_module.add(regions_table)
         guppy_module.add(events_table)
-        table = GuppyPeakAUC(
-            name="peak_auc_port_entries_dms_z_score",
-            description="peak/AUC summary",
-            trace_type="z_score",
-            unit="a.u.",
-            target_tables={"region": regions_table, "event": events_table},
-        )
-        table.add_row(
-            region=0, event=0, window_start=0.0, window_stop=1.0, peak_positive=2.5, peak_negative=-0.3,
-            area_under_curve=1.2,
-        )
-        guppy_module.add(table)
+        guppy_module.add(self._build(regions_table, events_table, binned=True))
         read = roundtrip(nwbfile)
-        read_table = read.processing["guppy"]["peak_auc_port_entries_dms_z_score"]
-        np.testing.assert_array_equal(read_table["area_under_curve"].data, [1.2])
-        assert read_table["event"].data[0] == 0
+        read_peak_auc = read.processing["guppy"]["peak_auc_port_entries_dms_z_score"]
+        np.testing.assert_array_equal(read_peak_auc.peak_positive[:], np.arange(6).reshape(2, 3))
+        assert read_peak_auc.peak_positive.shape[0] == read_peak_auc.window_start.shape[0]
+        assert read_peak_auc.peak_positive.shape[1] == read_peak_auc.trial_onset_times.shape[0]
+        np.testing.assert_array_equal(read_peak_auc.mean_area_under_curve[:], [1.0, 1.5])
+        assert read_peak_auc.bin_edges.attrs["bin_basis"] == "trials"
+        assert read_peak_auc.binned_peak_positive.shape == (2, 2)
+        assert read_peak_auc.event.data[0] == 0
 
 
 class TestGuppyValidSignalIntervals:
