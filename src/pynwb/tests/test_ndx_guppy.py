@@ -8,10 +8,11 @@ import numpy as np
 import pytest
 
 from pynwb import NWBHDF5IO
-from pynwb.misc import AnnotationSeries
+from pynwb.event import EventsTable
 from pynwb.testing.mock.file import mock_NWBFile
 from hdmf.common import DynamicTable, VectorData
 from hdmf.common.table import DynamicTableRegion
+from hdmf.backends.hdf5 import H5DataIO
 
 from ndx_guppy import (
     GuppyRegionsTable,
@@ -151,20 +152,33 @@ class TestGuppyEventsTable:
         assert list(read_table["raw_store_name"].data) == ["PrtN"]
 
     def test_optional_event_reference_roundtrip(self, nwbfile, guppy_module, roundtrip):
-        """The optional generic object reference roundtrips, pointing at a core NWBDataInterface."""
-        behavior = nwbfile.create_processing_module(name="behavior", description="events")
-        annotations = AnnotationSeries(
-            name="port_entries", data=["entry", "entry"], timestamps=[10.0, 20.0], description="port entries"
-        )
-        behavior.add(annotations)
+        """The optional reference roundtrips, pointing at a core pynwb.event.EventsTable."""
+        events_table = EventsTable(name="PortEntries", description="port entry events")
+        events_table.add_row(timestamp=10.0)
+        events_table.add_row(timestamp=20.0)
+        nwbfile.add_events_table(events_table)
 
-        table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-        table.add_row(event_name="port_entries", event_description="Port entry events", events=annotations)
+        # TODO(hdmf#1532): drop the H5DataIO(maxshape=(None,)) wrapper once the upstream fix lands.
+        # An object-reference column whose targets are DynamicTables (EventsTable) otherwise makes hdmf
+        # infer a rank-3 maxshape and reject the write; declaring the 1-D maxshape sidesteps it.
+        table = GuppyEventsTable(
+            name="events",
+            description="GuPPy behavioral events",
+            columns=[
+                VectorData(name="event_name", description="event name", data=["port_entries"]),
+                VectorData(name="event_description", description="event description", data=["Port entry events"]),
+                VectorData(
+                    name="events",
+                    description="reference to the EventsTable holding this event's onsets",
+                    data=H5DataIO([events_table], maxshape=(None,)),
+                ),
+            ],
+        )
         guppy_module.add(table)
 
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["events"]
-        assert read_table["events"][0].name == "port_entries"
+        assert read_table["events"][0].name == "PortEntries"
 
 
 # --------------------------------------------------------------------------- #

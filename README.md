@@ -7,7 +7,7 @@ GuPPy is a *processing* tool, not an acquisition system. This extension represen
 computes — normalized traces, detected transients, peri-event PSTHs, cross-correlations, and the parameters
 used — for a single session. Raw signal/control traces and behavioral events remain owned by the acquisition
 and events interfaces (e.g. [ndx-fiber-photometry](https://github.com/catalystneuro/ndx-fiber-photometry) and
-[ndx-events](https://github.com/rly/ndx-events)).
+pyNWB's core `EventsTable`).
 
 The design turns GuPPy's organizing features into structured, queryable NWB features:
 
@@ -35,7 +35,8 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   `FiberPhotometryTable` (anatomy is reached through this link, not duplicated).
 - **`GuppyEventsTable`** (extends `DynamicTable`) — one row per behavioral event GuPPy aligned to (e.g.
   `port_entries`). Columns: `event_name`, `event_description`, optional `raw_store_name`, and an optional
-  generic object reference `events` to the behavioral-event object (e.g. an `ndx_events.Events`).
+  object reference `events` to the `pynwb.event.EventsTable` holding the event's onsets (disambiguated by
+  `event_name` when several events share one merged table).
 
 ### Derived traces
 

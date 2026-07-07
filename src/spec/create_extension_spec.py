@@ -11,8 +11,8 @@ fiber-photometry processing tool. The design turns GuPPy's organizing features -
   directly on each object (values: ``control_fit`` / ``dff`` / ``z_score``).
 
 Cross-extension dependencies are quarantined: products reference ndx-guppy's own registry
-tables, and any outward link (to the acquisition ``FiberPhotometryTable`` or to an
-``ndx_events.Events`` object) is an optional column on a registry.
+tables, and any outward link (to the acquisition ``FiberPhotometryTable`` or to a
+``pynwb.event.EventsTable``) is an optional column on a registry.
 """
 from pathlib import Path
 
@@ -144,11 +144,11 @@ def main():
                 name="events",
                 neurodata_type_inc="VectorData",
                 doc=(
-                    "Optional object reference to the behavioral-event object holding this event's onset "
-                    "timestamps (e.g. an ndx_events.Events object in the behavior module). Kept as a generic "
-                    "object reference so ndx-guppy takes no hard dependency on ndx-events."
+                    "Optional object reference to the EventsTable holding this event's onset timestamps "
+                    "(a pynwb.event.EventsTable in nwbfile.events). When several events share one merged "
+                    "EventsTable, the row's 'event_name' disambiguates which of its events this row denotes."
                 ),
-                dtype=NWBRefSpec(target_type="NWBDataInterface", reftype="object"),
+                dtype=NWBRefSpec(target_type="EventsTable", reftype="object"),
                 quantity="?",
             ),
         ],

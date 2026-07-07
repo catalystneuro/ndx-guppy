@@ -53,12 +53,12 @@ groups:
   - name: events
     neurodata_type_inc: VectorData
     dtype:
-      target_type: NWBDataInterface
+      target_type: EventsTable
       reftype: object
-    doc: Optional object reference to the behavioral-event object holding this 
-      event's onset timestamps (e.g. an ndx_events.Events object in the behavior
-      module). Kept as a generic object reference so ndx-guppy takes no hard 
-      dependency on ndx-events.
+    doc: Optional object reference to the EventsTable holding this event's onset
+      timestamps (a pynwb.event.EventsTable in nwbfile.events). When several 
+      events share one merged EventsTable, the row's 'event_name' disambiguates 
+      which of its events this row denotes.
     quantity: '?'
 - neurodata_type_def: GuppyDerivedResponseSeries
   neurodata_type_inc: FiberPhotometryResponseSeries
