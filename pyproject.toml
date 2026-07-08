@@ -32,7 +32,10 @@ keywords = [
 ]
 dependencies = [
     "pynwb>=4.0.0",  # 4.0.0 required for the core pynwb.event.EventsTable referenced by GuppyEventsTable
-    "hdmf>=4.0.0",  # 4.0.0 required for numpy 2.0 compatibility
+    # TEMP: the GuppyEventsTable.events object reference to an EventsTable needs hdmf#1533 (fixes the
+    # rank-3 maxshape when writing a reference column targeting a DynamicTable). Merged to hdmf dev but
+    # not yet released; pin to the dev branch until the next hdmf release, then revert to a versioned pin.
+    "hdmf @ git+https://github.com/hdmf-dev/hdmf.git@dev",
     "ndx-fiber-photometry>=0.1.0",  # GuppyDerivedResponseSeries extends FiberPhotometryResponseSeries
 ]
 
@@ -40,7 +43,9 @@ dependencies = [
 # minimum versions of project dependencies for testing (see .github/workflows/run_all_tests.yml)
 test-min-deps = [
     "pynwb==4.0.0",
-    "hdmf==4.0.0",
+    # TEMP: min viable hdmf is the dev branch carrying hdmf#1533 (unreleased). Revert to a pinned
+    # released version (e.g. hdmf==<next release>) once the fix ships. See the main dependencies note.
+    "hdmf @ git+https://github.com/hdmf-dev/hdmf.git@dev",
     {include-group = "test"},
 ]
 
@@ -75,6 +80,11 @@ dev = [
 
 # Include only the source code under `src/pynwb/ndx_guppy` and the spec files under `spec`
 # in the wheel.
+[tool.hatch.metadata]
+# TEMP: required for the direct git reference to hdmf dev (see [project.dependencies]); drop this
+# once the hdmf pin reverts to a released version.
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/pynwb/ndx_guppy",

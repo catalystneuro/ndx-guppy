@@ -12,7 +12,6 @@ from pynwb.event import EventsTable
 from pynwb.testing.mock.file import mock_NWBFile
 from hdmf.common import DynamicTable, VectorData
 from hdmf.common.table import DynamicTableRegion
-from hdmf.backends.hdf5 import H5DataIO
 
 from ndx_guppy import (
     GuppyRegionsTable,
@@ -158,22 +157,8 @@ class TestGuppyEventsTable:
         events_table.add_row(timestamp=20.0)
         nwbfile.add_events_table(events_table)
 
-        # TODO(hdmf#1532): drop the H5DataIO(maxshape=(None,)) wrapper once the upstream fix lands.
-        # An object-reference column whose targets are DynamicTables (EventsTable) otherwise makes hdmf
-        # infer a rank-3 maxshape and reject the write; declaring the 1-D maxshape sidesteps it.
-        table = GuppyEventsTable(
-            name="events",
-            description="GuPPy behavioral events",
-            columns=[
-                VectorData(name="event_name", description="event name", data=["port_entries"]),
-                VectorData(name="event_description", description="event description", data=["Port entry events"]),
-                VectorData(
-                    name="events",
-                    description="reference to the EventsTable holding this event's onsets",
-                    data=H5DataIO([events_table], maxshape=(None,)),
-                ),
-            ],
-        )
+        table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
+        table.add_row(event_name="port_entries", event_description="Port entry events", events=events_table)
         guppy_module.add(table)
 
         read = roundtrip(nwbfile)
