@@ -60,7 +60,13 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 | `GuppyRegionsTable` | `n_regions` | **1** |
 | `GuppyEventsTable` | `n_events` | **1** |
 | `GuppyTransientSummaryTable` | `n_regions × n_features` (= 4 rows) | **1** |
-| `GuppyValidSignalIntervals` | `n_regions` (only if artifact coords exist) | **0** here |
+
+Valid-signal intervals (the artifact-free windows GuPPy keeps during preprocessing) are a
+per-region fact, so they are **not** a separate object: they ride on `GuppyRegionsTable` as an
+optional `obs_intervals`-style ragged column (`valid_signal_intervals`, a per-row list of
+`[start, stop]` pairs, indexed by `valid_signal_intervals_index`), exactly as the core `Units`
+table carries per-unit `obs_intervals`. The removal method is recorded once on
+`GuppyParameters.artifacts_removal_method`, not re-embedded here.
 
 ### Per-condition objects — axes that carry arrays
 

@@ -22,7 +22,6 @@ from ndx_guppy import (
     GuppyPSTH,
     GuppyCrossCorrelation,
     GuppyPeakAUC,
-    GuppyValidSignalIntervals,
     GuppyParameters,
 )
 
@@ -136,6 +135,19 @@ class TestGuppyRegionsTable:
         column = read_table["fiber_photometry_table_region"]
         target_indices = column.target.data[:] if hasattr(column, "target") else column.data[:]
         assert list(target_indices) == [0, 1]
+
+    def test_valid_signal_intervals_roundtrip(self, nwbfile, guppy_module, roundtrip):
+        """The optional obs_intervals-style ragged valid_signal_intervals column roundtrips per region."""
+        table = GuppyRegionsTable(name="regions", description="GuPPy logical regions")
+        # One region carries two valid intervals, the other carries none (empty ragged entry).
+        table.add_row(region="dms", valid_signal_intervals=[[0.0, 5.0], [7.0, 12.0]])
+        table.add_row(region="dls", valid_signal_intervals=[])
+        guppy_module.add(table)
+
+        read = roundtrip(nwbfile)
+        read_table = read.processing["guppy"]["regions"]
+        np.testing.assert_array_equal(read_table["valid_signal_intervals"][0], [[0.0, 5.0], [7.0, 12.0]])
+        np.testing.assert_array_equal(read_table["valid_signal_intervals"][1], np.empty((0, 2)))
 
 
 class TestGuppyEventsTable:
@@ -427,30 +439,6 @@ class TestGuppyPeakAUC:
         assert list(read_peak_auc.bin_event.data) == [0, 0, 1]
 
 
-class TestGuppyValidSignalIntervals:
-    def test_constructor(self, regions_table):
-        intervals = GuppyValidSignalIntervals(
-            name="valid_signal_intervals",
-            description="artifact-free intervals",
-            target_tables={"region": regions_table},
-        )
-        intervals.add_row(start_time=0.0, stop_time=5.0, region=0)
-        intervals.add_row(start_time=7.0, stop_time=12.0, region=0)
-        np.testing.assert_array_equal(intervals["start_time"].data, [0.0, 7.0])
-
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, roundtrip):
-        guppy_module.add(regions_table)
-        intervals = GuppyValidSignalIntervals(
-            name="valid_signal_intervals",
-            description="artifact-free intervals",
-            target_tables={"region": regions_table},
-        )
-        intervals.add_row(start_time=0.0, stop_time=5.0, region=0)
-        guppy_module.add(intervals)
-        read = roundtrip(nwbfile)
-        read_intervals = read.processing["guppy"]["valid_signal_intervals"]
-        np.testing.assert_array_equal(read_intervals["stop_time"].data, [5.0])
-        assert read_intervals["region"].data[0] == 0
 
 
 # --------------------------------------------------------------------------- #

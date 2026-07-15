@@ -30,6 +30,26 @@ groups:
     doc: Ragged index for fiber_photometry_table_region (multiple fiber rows per
       region).
     quantity: '?'
+  - name: valid_signal_intervals
+    neurodata_type_inc: VectorData
+    dtype: float64
+    dims:
+    - num_intervals
+    - start_end
+    shape:
+    - null
+    - 2
+    doc: Optional ragged per-region list of [start, stop] time intervals 
+      (seconds, session clock) retained as valid signal, i.e. not removed as 
+      artifacts during GuPPy preprocessing. Sourced from 
+      coordsForPreProcessing_<region>.npy. The removal method is recorded once 
+      on GuppyParameters.artifacts_removal_method.
+    quantity: '?'
+  - name: valid_signal_intervals_index
+    neurodata_type_inc: VectorIndex
+    doc: Ragged index for valid_signal_intervals (multiple intervals per 
+      region).
+    quantity: '?'
 - neurodata_type_def: GuppyEventsTable
   neurodata_type_inc: DynamicTable
   doc: Registry of behavioral events GuPPy aligned to (one row per event, e.g. 
@@ -537,14 +557,6 @@ groups:
     doc: Optional per-bin (binned-mean trace) area within each window, shape 
       (num_windows, num_bins), concatenated across events.
     quantity: '?'
-- neurodata_type_def: GuppyValidSignalIntervals
-  neurodata_type_inc: TimeIntervals
-  doc: Time intervals retained as valid signal (not removed as artifacts) during
-    GuPPy preprocessing, with a structured region reference per interval.
-  datasets:
-  - name: region
-    neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the GuppyRegionsTable row the interval applies to.
 - neurodata_type_def: GuppyParameters
   neurodata_type_inc: LabMetaData
   doc: Typed GuPPy processing parameters for the session (from 

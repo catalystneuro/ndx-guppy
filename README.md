@@ -30,9 +30,12 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
 ### Registries
 
 - **`GuppyRegionsTable`** (extends `DynamicTable`) — one row per GuPPy logical region (e.g. `dms`). Columns:
-  `region` (the semantic name), optional `raw_store_name` (from `storesList.csv`), and an optional ragged
+  `region` (the semantic name), optional `raw_store_name` (from `storesList.csv`), an optional ragged
   `fiber_photometry_table_region` linking each region to its signal + isosbestic fiber rows in the acquisition
-  `FiberPhotometryTable` (anatomy is reached through this link, not duplicated).
+  `FiberPhotometryTable` (anatomy is reached through this link, not duplicated), and an optional ragged
+  `valid_signal_intervals` column — an `obs_intervals`-style per-region list of `[start, stop]` artifact-free
+  windows (exactly as core `Units` carries per-unit `obs_intervals`; the removal method is recorded once on
+  `GuppyParameters.artifacts_removal_method`).
 - **`GuppyEventsTable`** (extends `DynamicTable`) — one row per behavioral event GuPPy aligned to (e.g.
   `port_entries`). Columns: `event_name`, `event_description`, optional `raw_store_name`, and an optional
   object reference `events` to the `pynwb.event.EventsTable` holding the event's onsets (disambiguated by
@@ -65,8 +68,9 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   within each peak window, so each per-trial metric is a `(num_windows, num_trials)` matrix (per-trial `event`),
   each mean metric is `(num_windows, num_events)` (`summary_event`), and the optional per-bin metrics carry a
   `bin_event` reference.
-- **`GuppyValidSignalIntervals`** (extends `TimeIntervals`) — artifact-free valid-signal windows with a
-  structured `region` reference per interval.
+
+Artifact-free valid-signal windows are **not** a separate object: they are a per-region fact carried on
+`GuppyRegionsTable` as the optional ragged `valid_signal_intervals` column described above.
 
 ### Parameters
 
@@ -234,6 +238,7 @@ classDiagram
         VectorData region
         VectorData raw_store_name [optional]
         DynamicTableRegion fiber_photometry_table_region [optional, ragged]
+        VectorData valid_signal_intervals [optional, ragged, (num_intervals, 2)]
     }
     class GuppyEventsTable {
         <<ndx-guppy>>
@@ -285,11 +290,6 @@ classDiagram
         dataset peak_positive (num_windows, num_trials)
         dataset mean_peak_positive (num_windows, num_events)
     }
-    class GuppyValidSignalIntervals {
-        <<ndx-guppy>>
-        --
-        DynamicTableRegion region
-    }
     class GuppyParameters {
         <<ndx-guppy>>
         LabMetaData
@@ -298,7 +298,6 @@ classDiagram
     GuppyDerivedResponseSeries ..> GuppyRegionsTable : region
     GuppyTransientsTable ..> GuppyRegionsTable : region
     GuppyTransientSummaryTable ..> GuppyRegionsTable : region
-    GuppyValidSignalIntervals ..> GuppyRegionsTable : region
     GuppyPSTH ..> GuppyRegionsTable : region
     GuppyPSTH ..> GuppyEventsTable : event
     GuppyCrossCorrelation ..> GuppyRegionsTable : region (2)

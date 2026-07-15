@@ -29,7 +29,6 @@ GuppyTransientSummaryTable = get_class("GuppyTransientSummaryTable", "ndx-guppy"
 GuppyPSTH = get_class("GuppyPSTH", "ndx-guppy")
 GuppyCrossCorrelation = get_class("GuppyCrossCorrelation", "ndx-guppy")
 GuppyPeakAUC = get_class("GuppyPeakAUC", "ndx-guppy")
-GuppyValidSignalIntervals = get_class("GuppyValidSignalIntervals", "ndx-guppy")
 
 # Parameters
 GuppyParameters = get_class("GuppyParameters", "ndx-guppy")
@@ -43,7 +42,6 @@ __all__ = [
     "GuppyPSTH",
     "GuppyCrossCorrelation",
     "GuppyPeakAUC",
-    "GuppyValidSignalIntervals",
     "GuppyParameters",
 ]
 

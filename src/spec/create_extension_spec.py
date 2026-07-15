@@ -110,6 +110,26 @@ def main():
                 doc="Ragged index for fiber_photometry_table_region (multiple fiber rows per region).",
                 quantity="?",
             ),
+            NWBDatasetSpec(
+                name="valid_signal_intervals",
+                neurodata_type_inc="VectorData",
+                doc=(
+                    "Optional ragged per-region list of [start, stop] time intervals (seconds, session "
+                    "clock) retained as valid signal, i.e. not removed as artifacts during GuPPy "
+                    "preprocessing. Sourced from coordsForPreProcessing_<region>.npy. The removal method "
+                    "is recorded once on GuppyParameters.artifacts_removal_method."
+                ),
+                dtype="float64",
+                shape=(None, 2),
+                dims=("num_intervals", "start_end"),
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="valid_signal_intervals_index",
+                neurodata_type_inc="VectorIndex",
+                doc="Ragged index for valid_signal_intervals (multiple intervals per region).",
+                quantity="?",
+            ),
         ],
     )
 
@@ -643,22 +663,6 @@ def main():
         ],
     )
 
-    guppy_valid_signal_intervals = NWBGroupSpec(
-        neurodata_type_def="GuppyValidSignalIntervals",
-        neurodata_type_inc="TimeIntervals",
-        doc=(
-            "Time intervals retained as valid signal (not removed as artifacts) during GuPPy preprocessing, "
-            "with a structured region reference per interval."
-        ),
-        datasets=[
-            NWBDatasetSpec(
-                name="region",
-                neurodata_type_inc="DynamicTableRegion",
-                doc="Reference to the GuppyRegionsTable row the interval applies to.",
-            ),
-        ],
-    )
-
     # ------------------------------------------------------------------ #
     # Parameters
     # ------------------------------------------------------------------ #
@@ -737,7 +741,6 @@ def main():
         guppy_psth,
         guppy_cross_correlation,
         guppy_peak_auc,
-        guppy_valid_signal_intervals,
         guppy_parameters,
     ]
 
