@@ -16,23 +16,23 @@ indexed by some subset of these.
 
 | Symbol | Meaning | Ranges over | Fixture value |
 |---|---|---|---|
-| `n_regions` | Recording sites (fiber locations) | `signal_<R>` entries in `storesList.csv` | **2** — `dms`, `dls` |
+| `n_recording_sites` | Recording sites (fiber locations) | `signal_<R>` entries in `storesList.csv` | **2** — `dms`, `dls` |
 | `n_events` | Behavioral events GuPPy aligned to | non-fiber stores in `storesList.csv` | **3** — `port_entries`, `rewarded_nose_pokes`, `unrewarded_nose_pokes` |
-| `n_traces` | Derived trace channels per region | `_DERIVED_TRACE_PREFIXES` | **3** — `control_fit`, `dff`, `z_score` |
+| `n_traces` | Derived trace channels per recording site | `_DERIVED_TRACE_PREFIXES` | **3** — `control_fit`, `dff`, `z_score` |
 | `n_features` | Trace types the *downstream analyses* run on | `_TRANSIENT_FEATURES` | **2** — `dff`, `z_score` |
-| `n_region_pairs` | Region pairs with a cross-correlation | `corr_*.h5` files | **1** — `(dls, dms)` |
+| `n_recording_site_pairs` | Recording-site pairs with a cross-correlation | `corr_*.h5` files | **1** — `(dls, dms)` |
 | `n_baselines` | PSTH baseline variants | corrected always; uncorrected optional | **2** — corrected + uncorrected |
 
 Two subtleties worth calling out, because they explain otherwise-surprising counts:
 
-- **`n_traces` (3) vs `n_features` (2).** GuPPy emits three derived channels per region, but
-  one of them — `control_fit` — is the *fitted isosbestic control*, an intermediate, not a
+- **`n_traces` (3) vs `n_features` (2).** GuPPy emits three derived channels per recording site,
+  but one of them — `control_fit` — is the *fitted isosbestic control*, an intermediate, not a
   signal of interest. Transients, PSTHs, cross-correlations, and peak/AUC are computed only on
   the real signals (`dff`, `z_score`). So products split on `n_features = 2`, while the raw
   traces split on `n_traces = 3`.
-- **`n_region_pairs` is not `n_regions²`.** GuPPy emits one cross-correlation per *ordered pair
-  it was asked to compute*, here just `(dls, dms)`. It is its own axis, not derived from
-  `n_regions`.
+- **`n_recording_site_pairs` is not `n_recording_sites²`.** GuPPy emits one cross-correlation per
+  *ordered pair it was asked to compute*, here just `(dls, dms)`. It is its own axis, not derived
+  from `n_recording_sites`.
 
 ---
 
@@ -57,15 +57,16 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 | Object | Rows | Count |
 |---|---|---|
 | `GuppyParameters` (LabMetaData) | — (one parameter set/session) | **1** |
-| `GuppyRegionsTable` | `n_regions` | **1** |
+| `GuppyRecordingSitesTable` | `n_recording_sites` | **1** |
 | `GuppyEventsTable` | `n_events` | **1** |
-| `GuppyTransientSummaryTable` | `n_regions × n_features` (= 4 rows) | **1** |
+| `GuppyTransientSummaryTable` | `n_recording_sites × n_features` (= 4 rows) | **1** |
 
 Valid-signal intervals (the artifact-free windows GuPPy keeps during preprocessing) are a
-per-region fact, so they are **not** a separate object: they ride on `GuppyRegionsTable` as an
-optional `obs_intervals`-style ragged column (`valid_signal_intervals`, a per-row list of
-`[start, stop]` pairs, indexed by `valid_signal_intervals_index`), exactly as the core `Units`
-table carries per-unit `obs_intervals`. The removal method is recorded once on
+per-recording-site fact, so they are **not** a separate object: they ride on
+`GuppyRecordingSitesTable` as an optional `obs_intervals`-style ragged column
+(`valid_signal_intervals`, a per-row list of `[start, stop]` pairs, indexed by
+`valid_signal_intervals_index`), exactly as the core `Units` table carries per-unit
+`obs_intervals`. The removal method is recorded once on
 `GuppyParameters.artifacts_removal_method`, not re-embedded here.
 
 ### Per-condition objects — axes that carry arrays
@@ -75,23 +76,23 @@ These hold an array per condition, so each condition is a separate object. Note 
 
 | Object | Multiplicity | Fixture count |
 |---|---|---|
-| `GuppyDerivedResponseSeries` | `n_regions × n_traces` | 2 × 3 = **6** |
-| `GuppyTransientsTable` | `n_regions × n_features` | 2 × 2 = **4** |
-| `GuppyCrossCorrelation` | `n_features × n_region_pairs` | 2 × 1 = **2** |
-| `GuppyPSTH` | `n_regions × n_features × n_baselines` | 2 × 2 × 2 = **8** |
-| `GuppyPeakAUC` | `n_regions × n_features` | 2 × 2 = **4** |
+| `GuppyDerivedResponseSeries` | `n_recording_sites × n_traces` | 2 × 3 = **6** |
+| `GuppyTransientsTable` | `n_recording_sites × n_features` | 2 × 2 = **4** |
+| `GuppyCrossCorrelation` | `n_features × n_recording_site_pairs` | 2 × 1 = **2** |
+| `GuppyPSTH` | `n_recording_sites × n_features × n_baselines` | 2 × 2 × 2 = **8** |
+| `GuppyPeakAUC` | `n_recording_sites × n_features` | 2 × 2 = **4** |
 
 ---
 
 ## 3. The total
 
 ```
-singletons          4   (regions + events + parameters + transient summary)
-derived traces      6   = n_regions · n_traces
-transients          4   = n_regions · n_features
-cross-correlation   2   = n_features · n_region_pairs
-PSTH                8   = n_regions · n_features · n_baselines
-peak / AUC          4   = n_regions · n_features
+singletons          4   (recording sites + events + parameters + transient summary)
+derived traces      6   = n_recording_sites · n_traces
+transients          4   = n_recording_sites · n_features
+cross-correlation   2   = n_features · n_recording_site_pairs
+PSTH                8   = n_recording_sites · n_features · n_baselines
+peak / AUC          4   = n_recording_sites · n_features
                   ───
 total              28
 ```
@@ -108,16 +109,16 @@ products were 64% of the file and grew linearly with `n_events`. They are now 14
 Three rules, applied consistently, produce the layout above. When justifying it to others,
 these are the load-bearing ideas:
 
-**(a) Identity lives once, in registries.** `region` and `dms`, `event` and `port_entries`,
-are *entities*. They are defined exactly once — as rows in `GuppyRegionsTable` and
-`GuppyEventsTable` — and every product points back at them with a `DynamicTableRegion`. Region
-and event are never re-spelled as free text on each product. So the proliferation of products
-does **not** proliferate identity: there are still only `n_regions + n_events` identity rows in
-the whole file.
+**(a) Identity lives once, in registries.** `recording_site` and `dms`, `event` and
+`port_entries`, are *entities*. They are defined exactly once — as rows in
+`GuppyRecordingSitesTable` and `GuppyEventsTable` — and every product points back at them with a
+`DynamicTableRegion`. Recording site and event are never re-spelled as free text on each product.
+So the proliferation of products does **not** proliferate identity: there are still only
+`n_recording_sites + n_events` identity rows in the whole file.
 
 **(b) Scalar-per-combination collapses to rows; array-per-combination becomes an object.**
-- The transient *summary* is one frequency + one mean amplitude per `(region, feature)` — scalars
-  — so all `n_regions · n_features` combinations live as **rows in one table**.
+- The transient *summary* is one frequency + one mean amplitude per `(recording_site, feature)` —
+  scalars — so all `n_recording_sites · n_features` combinations live as **rows in one table**.
 - A PSTH is a `(time × trials)` **matrix** per condition — an array — so each condition is
   **its own object**.
 
@@ -126,11 +127,11 @@ computed (with the event axis folded inside), plus a handful of tables that abso
 scalar.
 
 **(c) Bounded axes split objects; the unbounded axis is concatenated.** `trace_type` is a
-closed category (`control_fit`/`dff`/`z_score`) stamped as an **attribute**; `region` and the
-baseline flag are likewise bounded and stay attributes/refs on the object. Splitting objects
-along these *bounded* axes keeps `trace_type`/`region`/`baseline` as attributes and every array
-rectangular. The **event** axis is different — it is unbounded, so splitting on it would let the
-file grow without limit. Instead it is concatenated into the trials axis *inside* each object,
+closed category (`control_fit`/`dff`/`z_score`) stamped as an **attribute**; `recording_site` and
+the baseline flag are likewise bounded and stay attributes/refs on the object. Splitting objects
+along these *bounded* axes keeps `trace_type`/`recording_site`/`baseline` as attributes and every
+array rectangular. The **event** axis is different — it is unbounded, so splitting on it would let
+the file grow without limit. Instead it is concatenated into the trials axis *inside* each object,
 and `event` (which genuinely varies trial-to-trial) becomes a per-trial `DynamicTableRegion`
 into `GuppyEventsTable`. That is the rule working as intended, not a violation of it: bounded
 categories stay attributes; the one unbounded entity becomes data.
@@ -160,7 +161,7 @@ across events with its own event `DynamicTableRegion` (the CSR-style way to hold
 
 The bins need their own grain because GuPPy bins trials in fixed groups, so bin counts differ
 per event (fixture: 2 / 1 / 6) — ragged, handled by the same concatenate-plus-event-ref trick as
-the trials. `region`, `trace_type`, `baseline_corrected`, and `unit` stay object-level
+the trials. `recording_site`, `trace_type`, `baseline_corrected`, and `unit` stay object-level
 attributes/refs because they are constant within a condition.
 
 ### The remaining lever

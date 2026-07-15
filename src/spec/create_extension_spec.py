@@ -3,10 +3,10 @@
 
 ndx-guppy provides dedicated neurodata types for the derived outputs of the GuPPy
 fiber-photometry processing tool. The design turns GuPPy's organizing features --
-``region``, ``trace_type``, and ``event`` -- into structured, queryable NWB features:
+``recording_site``, ``trace_type``, and ``event`` -- into structured, queryable NWB features:
 
-- *region* and *event* are entities, so they live as rows in registry tables
-  (``GuppyRegionsTable``, ``GuppyEventsTable``) and are referenced via ``DynamicTableRegion``.
+- *recording_site* and *event* are entities, so they live as rows in registry tables
+  (``GuppyRecordingSitesTable``, ``GuppyEventsTable``) and are referenced via ``DynamicTableRegion``.
 - *trace_type* is a closed category, so it is a plain enumerated text attribute stamped
   directly on each object (values: ``control_fit`` / ``dff`` / ``z_score``).
 
@@ -38,9 +38,9 @@ def trace_type_attr():
     return NWBAttributeSpec(name="trace_type", doc=TRACE_TYPE_DOC, dtype="text")
 
 
-def region_region(doc, quantity=1):
-    """A ``DynamicTableRegion`` referencing rows of the ``GuppyRegionsTable``."""
-    return NWBDatasetSpec(name="region", neurodata_type_inc="DynamicTableRegion", doc=doc, quantity=quantity)
+def recording_site_region(doc, quantity=1):
+    """A ``DynamicTableRegion`` referencing rows of the ``GuppyRecordingSitesTable``."""
+    return NWBDatasetSpec(name="recording_site", neurodata_type_inc="DynamicTableRegion", doc=doc, quantity=quantity)
 
 
 def event_region(doc, quantity=1, name="event"):
@@ -71,25 +71,35 @@ def main():
     # ------------------------------------------------------------------ #
     # Registries (the structural backbone)
     # ------------------------------------------------------------------ #
-    guppy_regions_table = NWBGroupSpec(
-        neurodata_type_def="GuppyRegionsTable",
+    guppy_recording_sites_table = NWBGroupSpec(
+        neurodata_type_def="GuppyRecordingSitesTable",
         neurodata_type_inc="DynamicTable",
         doc=(
-            "Registry of GuPPy logical regions (one row per region, e.g. 'dms'). A GuPPy region is a "
-            "processing-level entity -- a signal+isosbestic pair collapsed into one derived signal -- "
-            "so it is the canonical region identity that GuPPy products reference."
+            "Registry of GuPPy recording sites (one row per recording site, e.g. 'dms'). A GuPPy recording "
+            "site is a processing-level entity -- a signal+isosbestic pair collapsed into one derived "
+            "signal -- so it is the canonical recording-site identity that GuPPy products reference."
         ),
         datasets=[
             NWBDatasetSpec(
-                name="region",
+                name="recording_site",
                 neurodata_type_inc="VectorData",
-                doc="The semantic region name from storesList.csv (e.g. 'dms'). The region's identity.",
+                doc=(
+                    "The semantic recording-site name from storesList.csv (e.g. 'dms'). The recording "
+                    "site's identity."
+                ),
                 dtype="text",
             ),
             NWBDatasetSpec(
-                name="raw_store_name",
+                name="store_id",
                 neurodata_type_inc="VectorData",
-                doc="Optional raw acquisition channel/store name from storesList.csv (e.g. 'Dv2A').",
+                doc="Optional backend/hardware acquisition store id from storesList.csv (e.g. 'Dv2A').",
+                dtype="text",
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="store_label",
+                neurodata_type_inc="VectorData",
+                doc="Optional frontend/user-supplied store label from storesList.csv (e.g. 'signal_dms').",
                 dtype="text",
                 quantity="?",
             ),
@@ -98,26 +108,26 @@ def main():
                 neurodata_type_inc="DynamicTableRegion",
                 doc=(
                     "Optional ragged reference into the acquisition FiberPhotometryTable (the signal + "
-                    "isosbestic fiber rows for this region). Absorbs the signal/control many-to-one mapping "
-                    "once, here, so products reference a single region row. Anatomical location is reached "
-                    "through this link (the fiber's 'location'), not duplicated."
+                    "isosbestic fiber rows for this recording site). Absorbs the signal/control "
+                    "many-to-one mapping once, here, so products reference a single recording-site row. "
+                    "Anatomical location is reached through this link (the fiber's 'location'), not duplicated."
                 ),
                 quantity="?",
             ),
             NWBDatasetSpec(
                 name="fiber_photometry_table_region_index",
                 neurodata_type_inc="VectorIndex",
-                doc="Ragged index for fiber_photometry_table_region (multiple fiber rows per region).",
+                doc="Ragged index for fiber_photometry_table_region (multiple fiber rows per recording site).",
                 quantity="?",
             ),
             NWBDatasetSpec(
                 name="valid_signal_intervals",
                 neurodata_type_inc="VectorData",
                 doc=(
-                    "Optional ragged per-region list of [start, stop] time intervals (seconds, session "
-                    "clock) retained as valid signal, i.e. not removed as artifacts during GuPPy "
-                    "preprocessing. Sourced from coordsForPreProcessing_<region>.npy. The removal method "
-                    "is recorded once on GuppyParameters.artifacts_removal_method."
+                    "Optional ragged per-recording-site list of [start, stop] time intervals (seconds, "
+                    "session clock) retained as valid signal, i.e. not removed as artifacts during GuPPy "
+                    "preprocessing. Sourced from coordsForPreProcessing_<recording_site>.npy. The removal "
+                    "method is recorded once on GuppyParameters.artifacts_removal_method."
                 ),
                 dtype="float64",
                 shape=(None, 2),
@@ -127,7 +137,7 @@ def main():
             NWBDatasetSpec(
                 name="valid_signal_intervals_index",
                 neurodata_type_inc="VectorIndex",
-                doc="Ragged index for valid_signal_intervals (multiple intervals per region).",
+                doc="Ragged index for valid_signal_intervals (multiple intervals per recording site).",
                 quantity="?",
             ),
         ],
@@ -154,9 +164,16 @@ def main():
                 dtype="text",
             ),
             NWBDatasetSpec(
-                name="raw_store_name",
+                name="store_id",
                 neurodata_type_inc="VectorData",
-                doc="Optional raw acquisition channel/store name from storesList.csv (e.g. 'PrtN').",
+                doc="Optional backend/hardware acquisition store id from storesList.csv (e.g. 'PrtN').",
+                dtype="text",
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="store_label",
+                neurodata_type_inc="VectorData",
+                doc="Optional frontend/user-supplied store label from storesList.csv (e.g. 'port_entries').",
                 dtype="text",
                 quantity="?",
             ),
@@ -181,15 +198,15 @@ def main():
         neurodata_type_def="GuppyDerivedResponseSeries",
         neurodata_type_inc="FiberPhotometryResponseSeries",
         doc=(
-            "A GuPPy-derived continuous trace (control_fit, dff, or z_score) for one region. Extends "
-            "FiberPhotometryResponseSeries to stamp the trace_type and to reference the GuPPy regions "
-            "registry; the inherited fiber_photometry_table_region still carries the physical "
-            "signal+isosbestic fiber provenance."
+            "A GuPPy-derived continuous trace (control_fit, dff, or z_score) for one recording site. "
+            "Extends FiberPhotometryResponseSeries to stamp the trace_type and to reference the GuPPy "
+            "recording sites registry; the inherited fiber_photometry_table_region still carries the "
+            "physical signal+isosbestic fiber provenance."
         ),
         attributes=[trace_type_attr()],
         datasets=[
-            region_region(
-                doc="Reference to the GuppyRegionsTable row for this trace's region (single row).",
+            recording_site_region(
+                doc="Reference to the GuppyRecordingSitesTable row for this trace's recording site (single row).",
             ),
         ],
     )
@@ -200,13 +217,15 @@ def main():
     guppy_transients_table = NWBGroupSpec(
         neurodata_type_def="GuppyTransientsTable",
         neurodata_type_inc="DynamicTable",
-        doc="GuPPy-detected transient peaks for one (region, trace_type).",
+        doc="GuPPy-detected transient peaks for one (recording_site, trace_type).",
         attributes=[
             trace_type_attr(),
             NWBAttributeSpec(name="unit", doc="Unit of the amplitude (matches the trace_type).", dtype="text"),
         ],
         datasets=[
-            region_region(doc="Reference to the GuppyRegionsTable row for this table's region (single row)."),
+            recording_site_region(
+                doc="Reference to the GuppyRecordingSitesTable row for this table's recording site (single row)."
+            ),
             NWBDatasetSpec(
                 name="timestamp",
                 neurodata_type_inc="VectorData",
@@ -226,14 +245,14 @@ def main():
         neurodata_type_def="GuppyTransientSummaryTable",
         neurodata_type_inc="DynamicTable",
         doc=(
-            "Per-session GuPPy transient summary: one row per (region, trace_type) with event frequency and "
-            "mean peak amplitude. region and trace_type vary per row, so they are columns."
+            "Per-session GuPPy transient summary: one row per (recording_site, trace_type) with event "
+            "frequency and mean peak amplitude. recording_site and trace_type vary per row, so they are columns."
         ),
         datasets=[
             NWBDatasetSpec(
-                name="region",
+                name="recording_site",
                 neurodata_type_inc="DynamicTableRegion",
-                doc="Reference to the GuppyRegionsTable row for this summary row's region.",
+                doc="Reference to the GuppyRecordingSitesTable row for this summary row's recording site.",
             ),
             NWBDatasetSpec(
                 name="trace_type",
@@ -260,8 +279,8 @@ def main():
         neurodata_type_def="GuppyPSTH",
         neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peri-event PSTH for one (region, trace_type) condition, concatenated across events. The "
-            "per-trial 'traces' matrix stacks every event's trials along the trials axis (each trial "
+            "Peri-event PSTH for one (recording_site, trace_type) condition, concatenated across events. "
+            "The per-trial 'traces' matrix stacks every event's trials along the trials axis (each trial "
             "labeled by the per-trial 'event' reference); 'mean'/'error' hold GuPPy's across-trial "
             "summary, one column per event ('summary_event'). The baseline-uncorrected variant is a "
             "second GuppyPSTH with baseline_corrected=False."
@@ -279,7 +298,9 @@ def main():
             ),
         ],
         datasets=[
-            region_region(doc="Reference to the GuppyRegionsTable row for this PSTH's region (single row)."),
+            recording_site_region(
+                doc="Reference to the GuppyRecordingSitesTable row for this PSTH's recording site (single row)."
+            ),
             event_region(
                 doc=(
                     "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)), "
@@ -387,10 +408,11 @@ def main():
         neurodata_type_def="GuppyCrossCorrelation",
         neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peri-event cross-correlation for one (trace_type, region-pair) condition, concatenated across "
-            "events, stored as a lags-by-trials matrix over a lag axis. The region reference points at two "
-            "rows (region_1, region_2); the per-trial 'event' reference labels each trials column and "
-            "'mean'/'error' hold the across-trial summary, one column per event ('summary_event')."
+            "Peri-event cross-correlation for one (trace_type, recording-site-pair) condition, concatenated "
+            "across events, stored as a lags-by-trials matrix over a lag axis. The recording_site reference "
+            "points at two rows (recording_site_1, recording_site_2); the per-trial 'event' reference labels "
+            "each trials column and 'mean'/'error' hold the across-trial summary, one column per event "
+            "('summary_event')."
         ),
         attributes=[
             NWBAttributeSpec(
@@ -402,8 +424,11 @@ def main():
             ),
         ],
         datasets=[
-            region_region(
-                doc="Reference to the two GuppyRegionsTable rows (region_1, region_2) for this cross-correlation.",
+            recording_site_region(
+                doc=(
+                    "Reference to the two GuppyRecordingSitesTable rows (recording_site_1, recording_site_2) "
+                    "for this cross-correlation."
+                ),
             ),
             event_region(
                 doc=(
@@ -509,11 +534,11 @@ def main():
         neurodata_type_def="GuppyPeakAUC",
         neurodata_type_inc="NWBDataInterface",
         doc=(
-            "Peak and area-under-curve summary of a peri-event PSTH for one (region, trace_type) condition, "
-            "concatenated across events. GuPPy computes peak_positive, peak_negative, and area for every "
-            "trial, every bin, and the across-trial mean within each peak window. The per-trial metric "
-            "matrices stack every event's trials along the trials axis (labeled by the per-trial 'event' "
-            "reference); the mean_* metrics hold one column per event ('summary_event')."
+            "Peak and area-under-curve summary of a peri-event PSTH for one (recording_site, trace_type) "
+            "condition, concatenated across events. GuPPy computes peak_positive, peak_negative, and area "
+            "for every trial, every bin, and the across-trial mean within each peak window. The per-trial "
+            "metric matrices stack every event's trials along the trials axis (labeled by the per-trial "
+            "'event' reference); the mean_* metrics hold one column per event ('summary_event')."
         ),
         attributes=[
             NWBAttributeSpec(
@@ -523,7 +548,9 @@ def main():
             NWBAttributeSpec(name="unit", doc="Unit of the peak/area values (matches the trace_type).", dtype="text"),
         ],
         datasets=[
-            region_region(doc="Reference to the GuppyRegionsTable row for this summary's region (single row)."),
+            recording_site_region(
+                doc="Reference to the GuppyRecordingSitesTable row for this summary's recording site (single row)."
+            ),
             event_region(
                 doc=(
                     "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)), "
@@ -740,7 +767,7 @@ def main():
     )
 
     new_data_types = [
-        guppy_regions_table,
+        guppy_recording_sites_table,
         guppy_events_table,
         guppy_derived_response_series,
         guppy_transients_table,

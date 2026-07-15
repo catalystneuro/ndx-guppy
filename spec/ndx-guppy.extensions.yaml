@@ -1,34 +1,40 @@
 groups:
-- neurodata_type_def: GuppyRegionsTable
+- neurodata_type_def: GuppyRecordingSitesTable
   neurodata_type_inc: DynamicTable
-  doc: Registry of GuPPy logical regions (one row per region, e.g. 'dms'). A 
-    GuPPy region is a processing-level entity -- a signal+isosbestic pair 
-    collapsed into one derived signal -- so it is the canonical region identity 
-    that GuPPy products reference.
+  doc: Registry of GuPPy recording sites (one row per recording site, e.g. 
+    'dms'). A GuPPy recording site is a processing-level entity -- a 
+    signal+isosbestic pair collapsed into one derived signal -- so it is the 
+    canonical recording-site identity that GuPPy products reference.
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: VectorData
     dtype: text
-    doc: The semantic region name from storesList.csv (e.g. 'dms'). The region's
-      identity.
-  - name: raw_store_name
+    doc: The semantic recording-site name from storesList.csv (e.g. 'dms'). The 
+      recording site's identity.
+  - name: store_id
     neurodata_type_inc: VectorData
     dtype: text
-    doc: Optional raw acquisition channel/store name from storesList.csv (e.g. 
-      'Dv2A').
+    doc: Optional backend/hardware acquisition store id from storesList.csv 
+      (e.g. 'Dv2A').
+    quantity: '?'
+  - name: store_label
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: Optional frontend/user-supplied store label from storesList.csv (e.g. 
+      'signal_dms').
     quantity: '?'
   - name: fiber_photometry_table_region
     neurodata_type_inc: DynamicTableRegion
     doc: Optional ragged reference into the acquisition FiberPhotometryTable 
-      (the signal + isosbestic fiber rows for this region). Absorbs the 
+      (the signal + isosbestic fiber rows for this recording site). Absorbs the 
       signal/control many-to-one mapping once, here, so products reference a 
-      single region row. Anatomical location is reached through this link (the 
-      fiber's 'location'), not duplicated.
+      single recording-site row. Anatomical location is reached through this 
+      link (the fiber's 'location'), not duplicated.
     quantity: '?'
   - name: fiber_photometry_table_region_index
     neurodata_type_inc: VectorIndex
     doc: Ragged index for fiber_photometry_table_region (multiple fiber rows per
-      region).
+      recording site).
     quantity: '?'
   - name: valid_signal_intervals
     neurodata_type_inc: VectorData
@@ -39,16 +45,16 @@ groups:
     shape:
     - null
     - 2
-    doc: Optional ragged per-region list of [start, stop] time intervals 
+    doc: Optional ragged per-recording-site list of [start, stop] time intervals
       (seconds, session clock) retained as valid signal, i.e. not removed as 
       artifacts during GuPPy preprocessing. Sourced from 
-      coordsForPreProcessing_<region>.npy. The removal method is recorded once 
-      on GuppyParameters.artifacts_removal_method.
+      coordsForPreProcessing_<recording_site>.npy. The removal method is 
+      recorded once on GuppyParameters.artifacts_removal_method.
     quantity: '?'
   - name: valid_signal_intervals_index
     neurodata_type_inc: VectorIndex
     doc: Ragged index for valid_signal_intervals (multiple intervals per 
-      region).
+      recording site).
     quantity: '?'
 - neurodata_type_def: GuppyEventsTable
   neurodata_type_inc: DynamicTable
@@ -64,11 +70,17 @@ groups:
     neurodata_type_inc: VectorData
     dtype: text
     doc: Human-readable description of the event.
-  - name: raw_store_name
+  - name: store_id
     neurodata_type_inc: VectorData
     dtype: text
-    doc: Optional raw acquisition channel/store name from storesList.csv (e.g. 
-      'PrtN').
+    doc: Optional backend/hardware acquisition store id from storesList.csv 
+      (e.g. 'PrtN').
+    quantity: '?'
+  - name: store_label
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: Optional frontend/user-supplied store label from storesList.csv (e.g. 
+      'port_entries').
     quantity: '?'
   - name: events
     neurodata_type_inc: VectorData
@@ -83,23 +95,23 @@ groups:
 - neurodata_type_def: GuppyDerivedResponseSeries
   neurodata_type_inc: FiberPhotometryResponseSeries
   doc: A GuPPy-derived continuous trace (control_fit, dff, or z_score) for one 
-    region. Extends FiberPhotometryResponseSeries to stamp the trace_type and to
-    reference the GuPPy regions registry; the inherited 
-    fiber_photometry_table_region still carries the physical signal+isosbestic 
-    fiber provenance.
+    recording site. Extends FiberPhotometryResponseSeries to stamp the 
+    trace_type and to reference the GuPPy recording sites registry; the 
+    inherited fiber_photometry_table_region still carries the physical 
+    signal+isosbestic fiber provenance.
   attributes:
   - name: trace_type
     dtype: text
     doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
       'control_fit', 'dff', or 'z_score'."
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the GuppyRegionsTable row for this trace's region (single 
-      row).
+    doc: Reference to the GuppyRecordingSitesTable row for this trace's 
+      recording site (single row).
 - neurodata_type_def: GuppyTransientsTable
   neurodata_type_inc: DynamicTable
-  doc: GuPPy-detected transient peaks for one (region, trace_type).
+  doc: GuPPy-detected transient peaks for one (recording_site, trace_type).
   attributes:
   - name: trace_type
     dtype: text
@@ -109,10 +121,10 @@ groups:
     dtype: text
     doc: Unit of the amplitude (matches the trace_type).
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the GuppyRegionsTable row for this table's region (single 
-      row).
+    doc: Reference to the GuppyRecordingSitesTable row for this table's 
+      recording site (single row).
   - name: timestamp
     neurodata_type_inc: VectorData
     dtype: float64
@@ -123,13 +135,14 @@ groups:
     doc: Trace value at the detected transient peak.
 - neurodata_type_def: GuppyTransientSummaryTable
   neurodata_type_inc: DynamicTable
-  doc: 'Per-session GuPPy transient summary: one row per (region, trace_type) with
-    event frequency and mean peak amplitude. region and trace_type vary per row, so
-    they are columns.'
+  doc: 'Per-session GuPPy transient summary: one row per (recording_site, trace_type)
+    with event frequency and mean peak amplitude. recording_site and trace_type vary
+    per row, so they are columns.'
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the GuppyRegionsTable row for this summary row's region.
+    doc: Reference to the GuppyRecordingSitesTable row for this summary row's 
+      recording site.
   - name: trace_type
     neurodata_type_inc: VectorData
     dtype: text
@@ -145,12 +158,12 @@ groups:
     doc: Mean amplitude of the detected transient peaks.
 - neurodata_type_def: GuppyPSTH
   neurodata_type_inc: NWBDataInterface
-  doc: Peri-event PSTH for one (region, trace_type) condition, concatenated 
-    across events. The per-trial 'traces' matrix stacks every event's trials 
-    along the trials axis (each trial labeled by the per-trial 'event' 
-    reference); 'mean'/'error' hold GuPPy's across-trial summary, one column per
-    event ('summary_event'). The baseline-uncorrected variant is a second 
-    GuppyPSTH with baseline_corrected=False.
+  doc: Peri-event PSTH for one (recording_site, trace_type) condition, 
+    concatenated across events. The per-trial 'traces' matrix stacks every 
+    event's trials along the trials axis (each trial labeled by the per-trial 
+    'event' reference); 'mean'/'error' hold GuPPy's across-trial summary, one 
+    column per event ('summary_event'). The baseline-uncorrected variant is a 
+    second GuppyPSTH with baseline_corrected=False.
   attributes:
   - name: description
     dtype: text
@@ -166,10 +179,10 @@ groups:
     dtype: text
     doc: Unit of the PSTH values (matches the trace_type).
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the GuppyRegionsTable row for this PSTH's region (single 
-      row).
+    doc: Reference to the GuppyRecordingSitesTable row for this PSTH's recording
+      site (single row).
   - name: event
     neurodata_type_inc: DynamicTableRegion
     doc: "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)),
@@ -272,11 +285,12 @@ groups:
     quantity: '?'
 - neurodata_type_def: GuppyCrossCorrelation
   neurodata_type_inc: NWBDataInterface
-  doc: Peri-event cross-correlation for one (trace_type, region-pair) condition,
-    concatenated across events, stored as a lags-by-trials matrix over a lag 
-    axis. The region reference points at two rows (region_1, region_2); the 
-    per-trial 'event' reference labels each trials column and 'mean'/'error' 
-    hold the across-trial summary, one column per event ('summary_event').
+  doc: Peri-event cross-correlation for one (trace_type, recording-site-pair) 
+    condition, concatenated across events, stored as a lags-by-trials matrix 
+    over a lag axis. The recording_site reference points at two rows 
+    (recording_site_1, recording_site_2); the per-trial 'event' reference labels
+    each trials column and 'mean'/'error' hold the across-trial summary, one 
+    column per event ('summary_event').
   attributes:
   - name: description
     dtype: text
@@ -289,10 +303,10 @@ groups:
     dtype: text
     doc: Unit of the cross-correlation values (normalized; typically 'a.u.').
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the two GuppyRegionsTable rows (region_1, region_2) for 
-      this cross-correlation.
+    doc: Reference to the two GuppyRecordingSitesTable rows (recording_site_1, 
+      recording_site_2) for this cross-correlation.
   - name: event
     neurodata_type_inc: DynamicTableRegion
     doc: "Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)),
@@ -394,12 +408,12 @@ groups:
     quantity: '?'
 - neurodata_type_def: GuppyPeakAUC
   neurodata_type_inc: NWBDataInterface
-  doc: Peak and area-under-curve summary of a peri-event PSTH for one (region, 
-    trace_type) condition, concatenated across events. GuPPy computes 
-    peak_positive, peak_negative, and area for every trial, every bin, and the 
-    across-trial mean within each peak window. The per-trial metric matrices 
-    stack every event's trials along the trials axis (labeled by the per-trial 
-    'event' reference); the mean_* metrics hold one column per event 
+  doc: Peak and area-under-curve summary of a peri-event PSTH for one 
+    (recording_site, trace_type) condition, concatenated across events. GuPPy 
+    computes peak_positive, peak_negative, and area for every trial, every bin, 
+    and the across-trial mean within each peak window. The per-trial metric 
+    matrices stack every event's trials along the trials axis (labeled by the 
+    per-trial 'event' reference); the mean_* metrics hold one column per event 
     ('summary_event').
   attributes:
   - name: description
@@ -413,10 +427,10 @@ groups:
     dtype: text
     doc: Unit of the peak/area values (matches the trace_type).
   datasets:
-  - name: region
+  - name: recording_site
     neurodata_type_inc: DynamicTableRegion
-    doc: Reference to the GuppyRegionsTable row for this summary's region 
-      (single row).
+    doc: Reference to the GuppyRecordingSitesTable row for this summary's 
+      recording site (single row).
   - name: event
     neurodata_type_inc: DynamicTableRegion
     doc: 'Per-trial reference into GuppyEventsTable: one row per trial (shape (num_trials,)),

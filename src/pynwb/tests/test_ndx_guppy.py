@@ -14,7 +14,7 @@ from hdmf.common import DynamicTable, VectorData
 from hdmf.common.table import DynamicTableRegion
 
 from ndx_guppy import (
-    GuppyRegionsTable,
+    GuppyRecordingSitesTable,
     GuppyEventsTable,
     GuppyDerivedResponseSeries,
     GuppyTransientsTable,
@@ -39,30 +39,39 @@ def guppy_module(nwbfile):
     return nwbfile.create_processing_module(name="guppy", description="GuPPy-derived outputs")
 
 
-def build_regions_table():
-    table = GuppyRegionsTable(name="regions", description="GuPPy logical regions")
-    table.add_row(region="dms", raw_store_name="Dv2A")
-    table.add_row(region="dls", raw_store_name="Dv1A")
+def build_recording_sites_table():
+    table = GuppyRecordingSitesTable(name="recording_sites", description="GuPPy recording sites")
+    table.add_row(recording_site="dms", store_id="Dv2A", store_label="signal_dms")
+    table.add_row(recording_site="dls", store_id="Dv1A", store_label="signal_dls")
     return table
 
 
 def build_events_table():
     table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-    table.add_row(event_name="port_entries", event_description="Port entry events", raw_store_name="PrtN")
+    table.add_row(
+        event_name="port_entries", event_description="Port entry events", store_id="PrtN", store_label="port_entries"
+    )
     return table
 
 
 def build_multi_events_table():
     """A two-event registry for the event-bearing products, which concatenate across events."""
     table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-    table.add_row(event_name="port_entries", event_description="Port entry events", raw_store_name="PrtN")
-    table.add_row(event_name="rewarded_nose_pokes", event_description="Rewarded nose pokes", raw_store_name="LNRW")
+    table.add_row(
+        event_name="port_entries", event_description="Port entry events", store_id="PrtN", store_label="port_entries"
+    )
+    table.add_row(
+        event_name="rewarded_nose_pokes",
+        event_description="Rewarded nose pokes",
+        store_id="LNRW",
+        store_label="rewarded_nose_pokes",
+    )
     return table
 
 
 @pytest.fixture
-def regions_table():
-    return build_regions_table()
+def recording_sites_table():
+    return build_recording_sites_table()
 
 
 @pytest.fixture
@@ -93,25 +102,27 @@ def roundtrip(tmp_path):
         io.close()
 
 
-def region_ref(name, indices, table, description="region reference"):
+def build_dynamic_table_region(name, indices, table, description="dynamic table region reference"):
     return DynamicTableRegion(name=name, data=list(indices), description=description, table=table)
 
 
 # --------------------------------------------------------------------------- #
 # Registries
 # --------------------------------------------------------------------------- #
-class TestGuppyRegionsTable:
-    def test_constructor(self, regions_table):
-        assert list(regions_table["region"].data) == ["dms", "dls"]
-        assert list(regions_table["raw_store_name"].data) == ["Dv2A", "Dv1A"]
-        assert "fiber_photometry_table_region" not in regions_table.colnames
+class TestGuppyRecordingSitesTable:
+    def test_constructor(self, recording_sites_table):
+        assert list(recording_sites_table["recording_site"].data) == ["dms", "dls"]
+        assert list(recording_sites_table["store_id"].data) == ["Dv2A", "Dv1A"]
+        assert list(recording_sites_table["store_label"].data) == ["signal_dms", "signal_dls"]
+        assert "fiber_photometry_table_region" not in recording_sites_table.colnames
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         read = roundtrip(nwbfile)
-        read_table = read.processing["guppy"]["regions"]
-        assert list(read_table["region"].data) == ["dms", "dls"]
-        assert list(read_table["raw_store_name"].data) == ["Dv2A", "Dv1A"]
+        read_table = read.processing["guppy"]["recording_sites"]
+        assert list(read_table["recording_site"].data) == ["dms", "dls"]
+        assert list(read_table["store_id"].data) == ["Dv2A", "Dv1A"]
+        assert list(read_table["store_label"].data) == ["signal_dms", "signal_dls"]
 
     def test_optional_fiber_link_roundtrip(self, nwbfile, guppy_module, roundtrip):
         """The optional ragged fiber_photometry_table_region column roundtrips (stand-in target table)."""
@@ -120,32 +131,32 @@ class TestGuppyRegionsTable:
             description="stand-in for the acquisition FiberPhotometryTable",
             columns=[VectorData(name="location", description="loc", data=["DMS", "DMS"])],
         )
-        table = GuppyRegionsTable(
-            name="regions",
-            description="GuPPy logical regions",
+        table = GuppyRecordingSitesTable(
+            name="recording_sites",
+            description="GuPPy recording sites",
             target_tables={"fiber_photometry_table_region": fiber_stand_in},
         )
-        table.add_row(region="dms", fiber_photometry_table_region=[0, 1])
+        table.add_row(recording_site="dms", fiber_photometry_table_region=[0, 1])
         guppy_module.add(fiber_stand_in)
         guppy_module.add(table)
 
         read = roundtrip(nwbfile)
-        read_table = read.processing["guppy"]["regions"]
+        read_table = read.processing["guppy"]["recording_sites"]
         # The ragged column is a VectorIndex over a DynamicTableRegion; check the stored target indices.
         column = read_table["fiber_photometry_table_region"]
         target_indices = column.target.data[:] if hasattr(column, "target") else column.data[:]
         assert list(target_indices) == [0, 1]
 
     def test_valid_signal_intervals_roundtrip(self, nwbfile, guppy_module, roundtrip):
-        """The optional obs_intervals-style ragged valid_signal_intervals column roundtrips per region."""
-        table = GuppyRegionsTable(name="regions", description="GuPPy logical regions")
-        # One region carries two valid intervals, the other carries none (empty ragged entry).
-        table.add_row(region="dms", valid_signal_intervals=[[0.0, 5.0], [7.0, 12.0]])
-        table.add_row(region="dls", valid_signal_intervals=[])
+        """The optional obs_intervals-style ragged valid_signal_intervals column roundtrips per recording site."""
+        table = GuppyRecordingSitesTable(name="recording_sites", description="GuPPy recording sites")
+        # One recording site carries two valid intervals, the other carries none (empty ragged entry).
+        table.add_row(recording_site="dms", valid_signal_intervals=[[0.0, 5.0], [7.0, 12.0]])
+        table.add_row(recording_site="dls", valid_signal_intervals=[])
         guppy_module.add(table)
 
         read = roundtrip(nwbfile)
-        read_table = read.processing["guppy"]["regions"]
+        read_table = read.processing["guppy"]["recording_sites"]
         np.testing.assert_array_equal(read_table["valid_signal_intervals"][0], [[0.0, 5.0], [7.0, 12.0]])
         np.testing.assert_array_equal(read_table["valid_signal_intervals"][1], np.empty((0, 2)))
 
@@ -160,7 +171,8 @@ class TestGuppyEventsTable:
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["events"]
         assert list(read_table["event_name"].data) == ["port_entries"]
-        assert list(read_table["raw_store_name"].data) == ["PrtN"]
+        assert list(read_table["store_id"].data) == ["PrtN"]
+        assert list(read_table["store_label"].data) == ["port_entries"]
 
     def test_optional_event_reference_roundtrip(self, nwbfile, guppy_module, roundtrip):
         """The optional reference roundtrips, pointing at a core pynwb.event.EventsTable."""
@@ -182,29 +194,29 @@ class TestGuppyEventsTable:
 # Derived traces
 # --------------------------------------------------------------------------- #
 class TestGuppyDerivedResponseSeries:
-    def test_constructor(self, regions_table):
+    def test_constructor(self, recording_sites_table):
         data = np.arange(100, dtype="float64")
         series = GuppyDerivedResponseSeries(
             name="z_score_dms",
             data=data,
             unit="a.u.",
             trace_type="z_score",
-            region=region_ref("region", [0], regions_table),
+            recording_site=build_dynamic_table_region("recording_site", [0], recording_sites_table),
             timestamps=np.linspace(0, 10, 100),
         )
         assert series.trace_type == "z_score"
-        assert series.region.table is regions_table
+        assert series.recording_site.table is recording_sites_table
         np.testing.assert_array_equal(series.data, data)
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         data = np.arange(100, dtype="float64")
         series = GuppyDerivedResponseSeries(
             name="z_score_dms",
             data=data,
             unit="a.u.",
             trace_type="z_score",
-            region=region_ref("region", [0], regions_table),
+            recording_site=build_dynamic_table_region("recording_site", [0], recording_sites_table),
             timestamps=np.linspace(0, 10, 100),
         )
         guppy_module.add(series)
@@ -212,87 +224,87 @@ class TestGuppyDerivedResponseSeries:
         read_series = read.processing["guppy"]["z_score_dms"]
         assert read_series.trace_type == "z_score"
         np.testing.assert_array_equal(read_series.data[:], data)
-        assert read_series.region.data[0] == 0
+        assert read_series.recording_site.data[0] == 0
 
 
 # --------------------------------------------------------------------------- #
 # Analysis products
 # --------------------------------------------------------------------------- #
 class TestGuppyTransientsTable:
-    def test_constructor(self, regions_table):
+    def test_constructor(self, recording_sites_table):
         table = GuppyTransientsTable(
             name="transients_dms_z_score",
             description="z_score transients in dms",
             trace_type="z_score",
             unit="a.u.",
-            target_tables={"region": regions_table},
+            target_tables={"recording_site": recording_sites_table},
         )
-        table.add_row(region=0, timestamp=1.5, amplitude=2.3)
-        table.add_row(region=0, timestamp=2.5, amplitude=1.1)
+        table.add_row(recording_site=0, timestamp=1.5, amplitude=2.3)
+        table.add_row(recording_site=0, timestamp=2.5, amplitude=1.1)
         assert table.trace_type == "z_score"
         np.testing.assert_array_equal(table["timestamp"].data, [1.5, 2.5])
         np.testing.assert_array_equal(table["amplitude"].data, [2.3, 1.1])
-        assert table["region"].table is regions_table
+        assert table["recording_site"].table is recording_sites_table
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         table = GuppyTransientsTable(
             name="transients_dms_z_score",
             description="z_score transients in dms",
             trace_type="z_score",
             unit="a.u.",
-            target_tables={"region": regions_table},
+            target_tables={"recording_site": recording_sites_table},
         )
-        table.add_row(region=0, timestamp=1.5, amplitude=2.3)
+        table.add_row(recording_site=0, timestamp=1.5, amplitude=2.3)
         guppy_module.add(table)
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["transients_dms_z_score"]
         assert read_table.trace_type == "z_score"
         np.testing.assert_array_equal(read_table["timestamp"].data, [1.5])
-        assert read_table["region"].data[0] == 0
+        assert read_table["recording_site"].data[0] == 0
 
 
 class TestGuppyTransientSummaryTable:
-    def test_constructor(self, regions_table):
+    def test_constructor(self, recording_sites_table):
         table = GuppyTransientSummaryTable(
             name="transient_summary",
-            description="per (region, trace_type) summary",
-            target_tables={"region": regions_table},
+            description="per (recording_site, trace_type) summary",
+            target_tables={"recording_site": recording_sites_table},
         )
-        table.add_row(region=0, trace_type="z_score", frequency_per_min=12.0, mean_amplitude=2.1)
-        table.add_row(region=1, trace_type="dff", frequency_per_min=8.0, mean_amplitude=0.05)
+        table.add_row(recording_site=0, trace_type="z_score", frequency_per_min=12.0, mean_amplitude=2.1)
+        table.add_row(recording_site=1, trace_type="dff", frequency_per_min=8.0, mean_amplitude=0.05)
         np.testing.assert_array_equal(table["frequency_per_min"].data, [12.0, 8.0])
         assert list(table["trace_type"].data) == ["z_score", "dff"]
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         table = GuppyTransientSummaryTable(
             name="transient_summary",
-            description="per (region, trace_type) summary",
-            target_tables={"region": regions_table},
+            description="per (recording_site, trace_type) summary",
+            target_tables={"recording_site": recording_sites_table},
         )
-        table.add_row(region=0, trace_type="z_score", frequency_per_min=12.0, mean_amplitude=2.1)
-        table.add_row(region=1, trace_type="dff", frequency_per_min=8.0, mean_amplitude=0.05)
+        table.add_row(recording_site=0, trace_type="z_score", frequency_per_min=12.0, mean_amplitude=2.1)
+        table.add_row(recording_site=1, trace_type="dff", frequency_per_min=8.0, mean_amplitude=0.05)
         guppy_module.add(table)
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["transient_summary"]
         np.testing.assert_array_equal(read_table["mean_amplitude"].data, [2.1, 0.05])
-        assert list(read_table["region"].data) == [0, 1]
+        assert list(read_table["recording_site"].data) == [0, 1]
 
 
 class TestGuppyPSTH:
-    # One PSTH per (region, trace_type, baseline) condition, concatenated across events.
+    # One PSTH per (recording_site, trace_type, baseline) condition, concatenated across events.
     # Event 0 contributes 2 trials, event 1 contributes 1 trial -> 3 trials total; bins are 2 + 1.
-    def _build(self, regions_table, events_table, binned=False):
+    def _build(self, recording_sites_table, events_table, binned=False):
         kwargs = dict(
             name="psth_dms_z_score",
             description="PSTH of z_score for dms.",
             trace_type="z_score",
             baseline_corrected=True,
             unit="a.u.",
-            region=region_ref("region", [0], regions_table),
-            event=region_ref("event", [0, 0, 1], events_table),  # per-trial
-            summary_event=region_ref("summary_event", [0, 1], events_table),  # per-event-column
+            recording_site=build_dynamic_table_region("recording_site", [0], recording_sites_table),
+            event=build_dynamic_table_region("event", [0, 0, 1], events_table),  # per-trial
+            summary_event=build_dynamic_table_region("summary_event", [0, 1], events_table),  # per-event-column
             peri_event_time=np.linspace(-1.0, 2.0, 4),
             trial_onset_times=np.array([10.0, 20.0, 30.0]),
             traces=np.arange(12, dtype="float64").reshape(4, 3),  # (num_samples, num_trials)
@@ -303,14 +315,14 @@ class TestGuppyPSTH:
             kwargs.update(
                 bin_edges=np.array([[0.0, 3.0], [3.0, 4.0], [0.0, 2.0]]),  # 2 bins from event 0, 1 from event 1
                 bin_edges__bin_basis="trials",
-                bin_event=region_ref("bin_event", [0, 0, 1], events_table),
+                bin_event=build_dynamic_table_region("bin_event", [0, 0, 1], events_table),
                 binned_mean=np.zeros((4, 3)),
                 binned_error=np.zeros((4, 3)),
             )
         return GuppyPSTH(**kwargs)
 
-    def test_constructor(self, regions_table, multi_events_table):
-        psth = self._build(regions_table, multi_events_table)
+    def test_constructor(self, recording_sites_table, multi_events_table):
+        psth = self._build(recording_sites_table, multi_events_table)
         assert psth.traces.shape == (4, 3)  # time-first
         assert psth.trace_type == "z_score"
         assert psth.baseline_corrected is True
@@ -319,10 +331,10 @@ class TestGuppyPSTH:
         assert list(psth.summary_event.data) == [0, 1]
         assert psth.mean.shape == (4, 2)  # one column per event
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, multi_events_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, multi_events_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         guppy_module.add(multi_events_table)
-        guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
+        guppy_module.add(self._build(recording_sites_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
         read_psth = read.processing["guppy"]["psth_dms_z_score"]
         assert read_psth.description == "PSTH of z_score for dms."
@@ -337,16 +349,18 @@ class TestGuppyPSTH:
 
 
 class TestGuppyCrossCorrelation:
-    # One cross-correlation per (trace_type, region-pair) condition, concatenated across events.
-    def _build(self, regions_table, events_table, binned=False):
+    # One cross-correlation per (trace_type, recording-site-pair) condition, concatenated across events.
+    def _build(self, recording_sites_table, events_table, binned=False):
         kwargs = dict(
             name="xcorr_z_score_dms_dls",
             description="Cross-correlation of z_score between dms and dls.",
             trace_type="z_score",
             unit="a.u.",
-            region=region_ref("region", [0, 1], regions_table),  # region_1, region_2
-            event=region_ref("event", [0, 0, 1], events_table),  # per-trial
-            summary_event=region_ref("summary_event", [0, 1], events_table),
+            recording_site=build_dynamic_table_region(
+                "recording_site", [0, 1], recording_sites_table
+            ),  # recording_site_1, recording_site_2
+            event=build_dynamic_table_region("event", [0, 0, 1], events_table),  # per-trial
+            summary_event=build_dynamic_table_region("summary_event", [0, 1], events_table),
             lag=np.linspace(-1.0, 1.0, 5),
             trial_onset_times=np.array([10.0, 20.0, 30.0]),
             trials=np.arange(15, dtype="float64").reshape(5, 3),  # (num_lags, num_trials)
@@ -357,46 +371,46 @@ class TestGuppyCrossCorrelation:
             kwargs.update(
                 bin_edges=np.array([[0.0, 3.0], [3.0, 4.0], [0.0, 2.0]]),
                 bin_edges__bin_basis="trials",
-                bin_event=region_ref("bin_event", [0, 0, 1], events_table),
+                bin_event=build_dynamic_table_region("bin_event", [0, 0, 1], events_table),
                 binned_mean=np.zeros((5, 3)),
                 binned_error=np.zeros((5, 3)),
             )
         return GuppyCrossCorrelation(**kwargs)
 
-    def test_constructor(self, regions_table, multi_events_table):
-        xcorr = self._build(regions_table, multi_events_table)
+    def test_constructor(self, recording_sites_table, multi_events_table):
+        xcorr = self._build(recording_sites_table, multi_events_table)
         assert xcorr.trials.shape == (5, 3)  # lag-first
-        assert list(xcorr.region.data) == [0, 1]
+        assert list(xcorr.recording_site.data) == [0, 1]
         assert list(xcorr.event.data) == [0, 0, 1]
         assert xcorr.mean.shape == (5, 2)
         np.testing.assert_array_equal(xcorr.trial_onset_times, [10.0, 20.0, 30.0])
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, multi_events_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, multi_events_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         guppy_module.add(multi_events_table)
-        guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
+        guppy_module.add(self._build(recording_sites_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
         read_xcorr = read.processing["guppy"]["xcorr_z_score_dms_dls"]
         np.testing.assert_array_equal(read_xcorr.trials[:], np.arange(15).reshape(5, 3))
         np.testing.assert_array_equal(read_xcorr.mean[:], np.arange(10).reshape(5, 2))
         assert read_xcorr.trials.shape[0] == read_xcorr.lag.shape[0]
         assert read_xcorr.trials.shape[1] == read_xcorr.trial_onset_times.shape[0]
-        assert list(read_xcorr.region.data) == [0, 1]
+        assert list(read_xcorr.recording_site.data) == [0, 1]
         assert list(read_xcorr.bin_event.data) == [0, 0, 1]
 
 
 class TestGuppyPeakAUC:
-    # One peak/AUC per (region, trace_type) condition, concatenated across events.
+    # One peak/AUC per (recording_site, trace_type) condition, concatenated across events.
     # 2 windows; event 0 contributes 2 trials, event 1 contributes 1 trial -> 3 trials; bins 2 + 1.
-    def _build(self, regions_table, events_table, binned=False):
+    def _build(self, recording_sites_table, events_table, binned=False):
         kwargs = dict(
             name="peak_auc_dms_z_score",
             description="Peak/AUC summary of z_score for dms.",
             trace_type="z_score",
             unit="a.u.",
-            region=region_ref("region", [0], regions_table),
-            event=region_ref("event", [0, 0, 1], events_table),  # per-trial
-            summary_event=region_ref("summary_event", [0, 1], events_table),
+            recording_site=build_dynamic_table_region("recording_site", [0], recording_sites_table),
+            event=build_dynamic_table_region("event", [0, 0, 1], events_table),  # per-trial
+            summary_event=build_dynamic_table_region("summary_event", [0, 1], events_table),
             window_start=np.array([-5.0, 0.0]),
             window_stop=np.array([0.0, 3.0]),
             trial_onset_times=np.array([10.0, 20.0, 30.0]),
@@ -411,15 +425,15 @@ class TestGuppyPeakAUC:
             kwargs.update(
                 bin_edges=np.array([[0.0, 3.0], [3.0, 4.0], [0.0, 2.0]]),
                 bin_edges__bin_basis="trials",
-                bin_event=region_ref("bin_event", [0, 0, 1], events_table),
+                bin_event=build_dynamic_table_region("bin_event", [0, 0, 1], events_table),
                 binned_peak_positive=np.zeros((2, 3)),
                 binned_peak_negative=np.zeros((2, 3)),
                 binned_area_under_curve=np.zeros((2, 3)),
             )
         return GuppyPeakAUC(**kwargs)
 
-    def test_constructor(self, regions_table, multi_events_table):
-        peak_auc = self._build(regions_table, multi_events_table)
+    def test_constructor(self, recording_sites_table, multi_events_table):
+        peak_auc = self._build(recording_sites_table, multi_events_table)
         assert peak_auc.trace_type == "z_score"
         assert peak_auc.peak_positive.shape == (2, 3)  # (num_windows, num_trials)
         assert peak_auc.mean_peak_positive.shape == (2, 2)  # (num_windows, num_events)
@@ -427,10 +441,10 @@ class TestGuppyPeakAUC:
         assert list(peak_auc.event.data) == [0, 0, 1]
         assert peak_auc.event.table is multi_events_table
 
-    def test_roundtrip(self, nwbfile, guppy_module, regions_table, multi_events_table, roundtrip):
-        guppy_module.add(regions_table)
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, multi_events_table, roundtrip):
+        guppy_module.add(recording_sites_table)
         guppy_module.add(multi_events_table)
-        guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
+        guppy_module.add(self._build(recording_sites_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
         read_peak_auc = read.processing["guppy"]["peak_auc_dms_z_score"]
         np.testing.assert_array_equal(read_peak_auc.peak_positive[:], np.arange(6).reshape(2, 3))

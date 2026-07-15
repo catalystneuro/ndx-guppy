@@ -17,7 +17,7 @@ import ndx_fiber_photometry  # noqa: F401
 load_namespaces(str(__spec_path))
 
 # Registries
-GuppyRegionsTable = get_class("GuppyRegionsTable", "ndx-guppy")
+GuppyRecordingSitesTable = get_class("GuppyRecordingSitesTable", "ndx-guppy")
 GuppyEventsTable = get_class("GuppyEventsTable", "ndx-guppy")
 
 # Derived traces
@@ -34,7 +34,7 @@ GuppyPeakAUC = get_class("GuppyPeakAUC", "ndx-guppy")
 GuppyParameters = get_class("GuppyParameters", "ndx-guppy")
 
 __all__ = [
-    "GuppyRegionsTable",
+    "GuppyRecordingSitesTable",
     "GuppyEventsTable",
     "GuppyDerivedResponseSeries",
     "GuppyTransientsTable",
