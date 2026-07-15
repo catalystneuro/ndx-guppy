@@ -286,6 +286,7 @@ class TestGuppyPSTH:
     def _build(self, regions_table, events_table, binned=False):
         kwargs = dict(
             name="psth_dms_z_score",
+            description="PSTH of z_score for dms.",
             trace_type="z_score",
             baseline_corrected=True,
             unit="a.u.",
@@ -324,6 +325,7 @@ class TestGuppyPSTH:
         guppy_module.add(self._build(regions_table, multi_events_table, binned=True))
         read = roundtrip(nwbfile)
         read_psth = read.processing["guppy"]["psth_dms_z_score"]
+        assert read_psth.description == "PSTH of z_score for dms."
         np.testing.assert_array_equal(read_psth.traces[:], np.arange(12).reshape(4, 3))
         np.testing.assert_array_equal(read_psth.mean[:], np.arange(8).reshape(4, 2))
         assert read_psth.traces.shape[0] == read_psth.peri_event_time.shape[0]
@@ -339,6 +341,7 @@ class TestGuppyCrossCorrelation:
     def _build(self, regions_table, events_table, binned=False):
         kwargs = dict(
             name="xcorr_z_score_dms_dls",
+            description="Cross-correlation of z_score between dms and dls.",
             trace_type="z_score",
             unit="a.u.",
             region=region_ref("region", [0, 1], regions_table),  # region_1, region_2
@@ -388,6 +391,7 @@ class TestGuppyPeakAUC:
     def _build(self, regions_table, events_table, binned=False):
         kwargs = dict(
             name="peak_auc_dms_z_score",
+            description="Peak/AUC summary of z_score for dms.",
             trace_type="z_score",
             unit="a.u.",
             region=region_ref("region", [0], regions_table),

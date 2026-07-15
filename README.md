@@ -265,7 +265,7 @@ classDiagram
     class GuppyPSTH {
         <<ndx-guppy>>
         --
-        attribute trace_type, unit : text
+        attribute description, trace_type, unit : text
         attribute baseline_corrected : bool
         DynamicTableRegion region
         DynamicTableRegion event, summary_event, bin_event
@@ -275,7 +275,7 @@ classDiagram
     class GuppyCrossCorrelation {
         <<ndx-guppy>>
         --
-        attribute trace_type, unit : text
+        attribute description, trace_type, unit : text
         DynamicTableRegion region (2)
         DynamicTableRegion event, summary_event, bin_event
         dataset trials (num_lags, num_trials)
@@ -284,7 +284,7 @@ classDiagram
     class GuppyPeakAUC {
         <<ndx-guppy>>
         --
-        attribute trace_type, unit : text
+        attribute description, trace_type, unit : text
         DynamicTableRegion region
         DynamicTableRegion event, summary_event, bin_event
         dataset peak_positive (num_windows, num_trials)

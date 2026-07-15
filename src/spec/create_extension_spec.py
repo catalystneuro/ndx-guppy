@@ -267,6 +267,7 @@ def main():
             "second GuppyPSTH with baseline_corrected=False."
         ),
         attributes=[
+            NWBAttributeSpec(name="description", doc="Human-readable description of this PSTH.", dtype="text"),
             trace_type_attr(),
             NWBAttributeSpec(
                 name="baseline_corrected",
@@ -392,6 +393,9 @@ def main():
             "'mean'/'error' hold the across-trial summary, one column per event ('summary_event')."
         ),
         attributes=[
+            NWBAttributeSpec(
+                name="description", doc="Human-readable description of this cross-correlation.", dtype="text"
+            ),
             trace_type_attr(),
             NWBAttributeSpec(
                 name="unit", doc="Unit of the cross-correlation values (normalized; typically 'a.u.').", dtype="text"
@@ -512,6 +516,9 @@ def main():
             "reference); the mean_* metrics hold one column per event ('summary_event')."
         ),
         attributes=[
+            NWBAttributeSpec(
+                name="description", doc="Human-readable description of this peak/AUC summary.", dtype="text"
+            ),
             trace_type_attr(),
             NWBAttributeSpec(name="unit", doc="Unit of the peak/area values (matches the trace_type).", dtype="text"),
         ],

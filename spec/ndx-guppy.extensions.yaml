@@ -152,6 +152,9 @@ groups:
     event ('summary_event'). The baseline-uncorrected variant is a second 
     GuppyPSTH with baseline_corrected=False.
   attributes:
+  - name: description
+    dtype: text
+    doc: Human-readable description of this PSTH.
   - name: trace_type
     dtype: text
     doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
@@ -275,6 +278,9 @@ groups:
     per-trial 'event' reference labels each trials column and 'mean'/'error' 
     hold the across-trial summary, one column per event ('summary_event').
   attributes:
+  - name: description
+    dtype: text
+    doc: Human-readable description of this cross-correlation.
   - name: trace_type
     dtype: text
     doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
@@ -396,6 +402,9 @@ groups:
     'event' reference); the mean_* metrics hold one column per event 
     ('summary_event').
   attributes:
+  - name: description
+    dtype: text
+    doc: Human-readable description of this peak/AUC summary.
   - name: trace_type
     dtype: text
     doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
