@@ -11,49 +11,18 @@ groups:
     dtype: text
     doc: The semantic recording-site name from storesList.csv (e.g. 'dms'). The 
       recording site's identity.
-  - name: store_id
-    neurodata_type_inc: VectorData
-    dtype: text
-    doc: Optional backend/hardware acquisition store id from storesList.csv 
-      (e.g. 'Dv2A').
-    quantity: '?'
-  - name: store_label
-    neurodata_type_inc: VectorData
-    dtype: text
-    doc: Optional frontend/user-supplied store label from storesList.csv (e.g. 
-      'signal_dms').
-    quantity: '?'
   - name: fiber_photometry_table_region
     neurodata_type_inc: DynamicTableRegion
     doc: Optional ragged reference into the acquisition FiberPhotometryTable 
       (the signal + isosbestic fiber rows for this recording site). Absorbs the 
       signal/control many-to-one mapping once, here, so products reference a 
-      single recording-site row. Anatomical location is reached through this 
-      link (the fiber's 'location'), not duplicated.
+      single recording-site row and reach the physical fiber provenance through 
+      it. Populated at conversion time by a converter that owns the acquisition 
+      side (see the neuroconv GuppyInterface).
     quantity: '?'
   - name: fiber_photometry_table_region_index
     neurodata_type_inc: VectorIndex
     doc: Ragged index for fiber_photometry_table_region (multiple fiber rows per
-      recording site).
-    quantity: '?'
-  - name: valid_signal_intervals
-    neurodata_type_inc: VectorData
-    dtype: float64
-    dims:
-    - num_intervals
-    - start_end
-    shape:
-    - null
-    - 2
-    doc: Optional ragged per-recording-site list of [start, stop] time intervals
-      (seconds, session clock) retained as valid signal, i.e. not removed as 
-      artifacts during GuPPy preprocessing. Sourced from 
-      coordsForPreProcessing_<recording_site>.npy. The removal method is 
-      recorded once on GuppyParameters.artifacts_removal_method.
-    quantity: '?'
-  - name: valid_signal_intervals_index
-    neurodata_type_inc: VectorIndex
-    doc: Ragged index for valid_signal_intervals (multiple intervals per 
       recording site).
     quantity: '?'
 - neurodata_type_def: GuppyEventsTable
@@ -66,31 +35,16 @@ groups:
     neurodata_type_inc: VectorData
     dtype: text
     doc: The semantic event name from storesList.csv (e.g. 'port_entries').
-  - name: event_description
-    neurodata_type_inc: VectorData
-    dtype: text
-    doc: Human-readable description of the event.
-  - name: store_id
-    neurodata_type_inc: VectorData
-    dtype: text
-    doc: Optional backend/hardware acquisition store id from storesList.csv 
-      (e.g. 'PrtN').
-    quantity: '?'
-  - name: store_label
-    neurodata_type_inc: VectorData
-    dtype: text
-    doc: Optional frontend/user-supplied store label from storesList.csv (e.g. 
-      'port_entries').
-    quantity: '?'
   - name: events
-    neurodata_type_inc: VectorData
-    dtype:
-      target_type: EventsTable
-      reftype: object
-    doc: Optional object reference to the EventsTable holding this event's onset
-      timestamps (a pynwb.event.EventsTable in nwbfile.events). When several 
-      events share one merged EventsTable, the row's 'event_name' disambiguates 
-      which of its events this row denotes.
+    neurodata_type_inc: DynamicTableRegion
+    doc: Optional ragged reference into the merged pynwb EventsTable (in 
+      nwbfile.events) selecting this event type's occurrence rows. Populated at 
+      conversion time by a converter that merges every event type into one 
+      EventsTable (see the neuroconv GuppyInterface).
+    quantity: '?'
+  - name: events_index
+    neurodata_type_inc: VectorIndex
+    doc: Ragged index for events (multiple occurrence rows per event type).
     quantity: '?'
 - neurodata_type_def: GuppyDerivedResponseSeries
   neurodata_type_inc: FiberPhotometryResponseSeries
@@ -580,6 +534,16 @@ groups:
     doc: Optional per-bin (binned-mean trace) area within each window, shape 
       (num_windows, num_bins), concatenated across events.
     quantity: '?'
+- neurodata_type_def: GuppyValidSignalIntervals
+  neurodata_type_inc: TimeIntervals
+  doc: Time intervals retained as valid signal (not removed as artifacts) during
+    GuPPy preprocessing, one row per interval with a structured recording-site 
+    reference. Sourced from coordsForPreProcessing_<recording_site>.npy; the 
+    removal method is recorded once on GuppyParameters.artifacts_removal_method.
+  datasets:
+  - name: recording_site
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRecordingSitesTable row this interval applies to.
 - neurodata_type_def: GuppyParameters
   neurodata_type_inc: LabMetaData
   doc: Typed GuPPy processing parameters for the session (from 

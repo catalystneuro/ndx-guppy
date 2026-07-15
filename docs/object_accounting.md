@@ -60,13 +60,14 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 | `GuppyRecordingSitesTable` | `n_recording_sites` | **1** |
 | `GuppyEventsTable` | `n_events` | **1** |
 | `GuppyTransientSummaryTable` | `n_recording_sites × n_features` (= 4 rows) | **1** |
+| `GuppyValidSignalIntervals` | Σ valid intervals over recording sites | **1** |
 
 Valid-signal intervals (the artifact-free windows GuPPy keeps during preprocessing) are a
-per-recording-site fact, so they are **not** a separate object: they ride on
-`GuppyRecordingSitesTable` as an optional `obs_intervals`-style ragged column
-(`valid_signal_intervals`, a per-row list of `[start, stop]` pairs, indexed by
-`valid_signal_intervals_index`), exactly as the core `Units` table carries per-unit
-`obs_intervals`. The removal method is recorded once on
+per-recording-site fact carried in one `GuppyValidSignalIntervals` object (a `TimeIntervals`
+subclass), one row per interval with a `recording_site` `DynamicTableRegion` back into
+`GuppyRecordingSitesTable`. It is its own object (rather than a ragged column on the
+recording-sites registry) so that registry can stay a slim, converter-buildable table of just
+names + links. The removal method is recorded once on
 `GuppyParameters.artifacts_removal_method`, not re-embedded here.
 
 ### Per-condition objects — axes that carry arrays
@@ -87,20 +88,20 @@ These hold an array per condition, so each condition is a separate object. Note 
 ## 3. The total
 
 ```
-singletons          4   (recording sites + events + parameters + transient summary)
+singletons          5   (recording sites + events + parameters + transient summary + valid intervals)
 derived traces      6   = n_recording_sites · n_traces
 transients          4   = n_recording_sites · n_features
 cross-correlation   2   = n_features · n_recording_site_pairs
 PSTH                8   = n_recording_sites · n_features · n_baselines
 peak / AUC          4   = n_recording_sites · n_features
                   ───
-total              28
+total              29
 ```
 
 No multiplicity carries `n_events`, so adding behavioral events does not add objects — it adds
 *columns* to the existing PSTH/peak-AUC/cross-correlation objects. Before the events axis was
 concatenated this same fixture produced **56** objects (PSTH alone was 24); the event-bearing
-products were 64% of the file and grew linearly with `n_events`. They are now 14 of 28, fixed.
+products were 64% of the file and grew linearly with `n_events`. They are now 14 of 29, fixed.
 
 ---
 
@@ -122,7 +123,7 @@ So the proliferation of products does **not** proliferate identity: there are st
 - A PSTH is a `(time × trials)` **matrix** per condition — an array — so each condition is
   **its own object**.
 
-The 28 objects are not 28 modelling decisions; they are the count of array-valued results GuPPy
+The 29 objects are not 29 modelling decisions; they are the count of array-valued results GuPPy
 computed (with the event axis folded inside), plus a handful of tables that absorb everything
 scalar.
 

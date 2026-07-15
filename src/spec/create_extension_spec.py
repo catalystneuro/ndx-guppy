@@ -22,7 +22,6 @@ from pynwb.spec import (
     NWBGroupSpec,
     NWBDatasetSpec,
     NWBAttributeSpec,
-    NWBRefSpec,
 )
 
 # Controlled vocabulary for the ``trace_type`` attribute, documented (not hard-enforced) so a
@@ -90,27 +89,14 @@ def main():
                 dtype="text",
             ),
             NWBDatasetSpec(
-                name="store_id",
-                neurodata_type_inc="VectorData",
-                doc="Optional backend/hardware acquisition store id from storesList.csv (e.g. 'Dv2A').",
-                dtype="text",
-                quantity="?",
-            ),
-            NWBDatasetSpec(
-                name="store_label",
-                neurodata_type_inc="VectorData",
-                doc="Optional frontend/user-supplied store label from storesList.csv (e.g. 'signal_dms').",
-                dtype="text",
-                quantity="?",
-            ),
-            NWBDatasetSpec(
                 name="fiber_photometry_table_region",
                 neurodata_type_inc="DynamicTableRegion",
                 doc=(
                     "Optional ragged reference into the acquisition FiberPhotometryTable (the signal + "
                     "isosbestic fiber rows for this recording site). Absorbs the signal/control "
-                    "many-to-one mapping once, here, so products reference a single recording-site row. "
-                    "Anatomical location is reached through this link (the fiber's 'location'), not duplicated."
+                    "many-to-one mapping once, here, so products reference a single recording-site row "
+                    "and reach the physical fiber provenance through it. Populated at conversion time "
+                    "by a converter that owns the acquisition side (see the neuroconv GuppyInterface)."
                 ),
                 quantity="?",
             ),
@@ -118,26 +104,6 @@ def main():
                 name="fiber_photometry_table_region_index",
                 neurodata_type_inc="VectorIndex",
                 doc="Ragged index for fiber_photometry_table_region (multiple fiber rows per recording site).",
-                quantity="?",
-            ),
-            NWBDatasetSpec(
-                name="valid_signal_intervals",
-                neurodata_type_inc="VectorData",
-                doc=(
-                    "Optional ragged per-recording-site list of [start, stop] time intervals (seconds, "
-                    "session clock) retained as valid signal, i.e. not removed as artifacts during GuPPy "
-                    "preprocessing. Sourced from coordsForPreProcessing_<recording_site>.npy. The removal "
-                    "method is recorded once on GuppyParameters.artifacts_removal_method."
-                ),
-                dtype="float64",
-                shape=(None, 2),
-                dims=("num_intervals", "start_end"),
-                quantity="?",
-            ),
-            NWBDatasetSpec(
-                name="valid_signal_intervals_index",
-                neurodata_type_inc="VectorIndex",
-                doc="Ragged index for valid_signal_intervals (multiple intervals per recording site).",
                 quantity="?",
             ),
         ],
@@ -158,34 +124,20 @@ def main():
                 dtype="text",
             ),
             NWBDatasetSpec(
-                name="event_description",
-                neurodata_type_inc="VectorData",
-                doc="Human-readable description of the event.",
-                dtype="text",
-            ),
-            NWBDatasetSpec(
-                name="store_id",
-                neurodata_type_inc="VectorData",
-                doc="Optional backend/hardware acquisition store id from storesList.csv (e.g. 'PrtN').",
-                dtype="text",
-                quantity="?",
-            ),
-            NWBDatasetSpec(
-                name="store_label",
-                neurodata_type_inc="VectorData",
-                doc="Optional frontend/user-supplied store label from storesList.csv (e.g. 'port_entries').",
-                dtype="text",
-                quantity="?",
-            ),
-            NWBDatasetSpec(
                 name="events",
-                neurodata_type_inc="VectorData",
+                neurodata_type_inc="DynamicTableRegion",
                 doc=(
-                    "Optional object reference to the EventsTable holding this event's onset timestamps "
-                    "(a pynwb.event.EventsTable in nwbfile.events). When several events share one merged "
-                    "EventsTable, the row's 'event_name' disambiguates which of its events this row denotes."
+                    "Optional ragged reference into the merged pynwb EventsTable (in nwbfile.events) "
+                    "selecting this event type's occurrence rows. Populated at conversion time by a "
+                    "converter that merges every event type into one EventsTable (see the neuroconv "
+                    "GuppyInterface)."
                 ),
-                dtype=NWBRefSpec(target_type="EventsTable", reftype="object"),
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="events_index",
+                neurodata_type_inc="VectorIndex",
+                doc="Ragged index for events (multiple occurrence rows per event type).",
                 quantity="?",
             ),
         ],
@@ -697,6 +649,24 @@ def main():
         ],
     )
 
+    guppy_valid_signal_intervals = NWBGroupSpec(
+        neurodata_type_def="GuppyValidSignalIntervals",
+        neurodata_type_inc="TimeIntervals",
+        doc=(
+            "Time intervals retained as valid signal (not removed as artifacts) during GuPPy "
+            "preprocessing, one row per interval with a structured recording-site reference. Sourced "
+            "from coordsForPreProcessing_<recording_site>.npy; the removal method is recorded once on "
+            "GuppyParameters.artifacts_removal_method."
+        ),
+        datasets=[
+            NWBDatasetSpec(
+                name="recording_site",
+                neurodata_type_inc="DynamicTableRegion",
+                doc="Reference to the GuppyRecordingSitesTable row this interval applies to.",
+            ),
+        ],
+    )
+
     # ------------------------------------------------------------------ #
     # Parameters
     # ------------------------------------------------------------------ #
@@ -775,6 +745,7 @@ def main():
         guppy_psth,
         guppy_cross_correlation,
         guppy_peak_auc,
+        guppy_valid_signal_intervals,
         guppy_parameters,
     ]
 

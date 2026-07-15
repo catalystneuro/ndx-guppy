@@ -22,6 +22,7 @@ from ndx_guppy import (
     GuppyPSTH,
     GuppyCrossCorrelation,
     GuppyPeakAUC,
+    GuppyValidSignalIntervals,
     GuppyParameters,
 )
 
@@ -41,31 +42,22 @@ def guppy_module(nwbfile):
 
 def build_recording_sites_table():
     table = GuppyRecordingSitesTable(name="recording_sites", description="GuPPy recording sites")
-    table.add_row(recording_site="dms", store_id="Dv2A", store_label="signal_dms")
-    table.add_row(recording_site="dls", store_id="Dv1A", store_label="signal_dls")
+    table.add_row(recording_site="dms")
+    table.add_row(recording_site="dls")
     return table
 
 
 def build_events_table():
     table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-    table.add_row(
-        event_name="port_entries", event_description="Port entry events", store_id="PrtN", store_label="port_entries"
-    )
+    table.add_row(event_name="port_entries")
     return table
 
 
 def build_multi_events_table():
     """A two-event registry for the event-bearing products, which concatenate across events."""
     table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-    table.add_row(
-        event_name="port_entries", event_description="Port entry events", store_id="PrtN", store_label="port_entries"
-    )
-    table.add_row(
-        event_name="rewarded_nose_pokes",
-        event_description="Rewarded nose pokes",
-        store_id="LNRW",
-        store_label="rewarded_nose_pokes",
-    )
+    table.add_row(event_name="port_entries")
+    table.add_row(event_name="rewarded_nose_pokes")
     return table
 
 
@@ -112,8 +104,6 @@ def build_dynamic_table_region(name, indices, table, description="dynamic table 
 class TestGuppyRecordingSitesTable:
     def test_constructor(self, recording_sites_table):
         assert list(recording_sites_table["recording_site"].data) == ["dms", "dls"]
-        assert list(recording_sites_table["store_id"].data) == ["Dv2A", "Dv1A"]
-        assert list(recording_sites_table["store_label"].data) == ["signal_dms", "signal_dls"]
         assert "fiber_photometry_table_region" not in recording_sites_table.colnames
 
     def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
@@ -121,8 +111,6 @@ class TestGuppyRecordingSitesTable:
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["recording_sites"]
         assert list(read_table["recording_site"].data) == ["dms", "dls"]
-        assert list(read_table["store_id"].data) == ["Dv2A", "Dv1A"]
-        assert list(read_table["store_label"].data) == ["signal_dms", "signal_dls"]
 
     def test_optional_fiber_link_roundtrip(self, nwbfile, guppy_module, roundtrip):
         """The optional ragged fiber_photometry_table_region column roundtrips (stand-in target table)."""
@@ -147,47 +135,60 @@ class TestGuppyRecordingSitesTable:
         target_indices = column.target.data[:] if hasattr(column, "target") else column.data[:]
         assert list(target_indices) == [0, 1]
 
-    def test_valid_signal_intervals_roundtrip(self, nwbfile, guppy_module, roundtrip):
-        """The optional obs_intervals-style ragged valid_signal_intervals column roundtrips per recording site."""
-        table = GuppyRecordingSitesTable(name="recording_sites", description="GuPPy recording sites")
-        # One recording site carries two valid intervals, the other carries none (empty ragged entry).
-        table.add_row(recording_site="dms", valid_signal_intervals=[[0.0, 5.0], [7.0, 12.0]])
-        table.add_row(recording_site="dls", valid_signal_intervals=[])
-        guppy_module.add(table)
-
-        read = roundtrip(nwbfile)
-        read_table = read.processing["guppy"]["recording_sites"]
-        np.testing.assert_array_equal(read_table["valid_signal_intervals"][0], [[0.0, 5.0], [7.0, 12.0]])
-        np.testing.assert_array_equal(read_table["valid_signal_intervals"][1], np.empty((0, 2)))
-
 
 class TestGuppyEventsTable:
     def test_constructor(self, events_table):
         assert list(events_table["event_name"].data) == ["port_entries"]
-        assert list(events_table["event_description"].data) == ["Port entry events"]
+        assert "events" not in events_table.colnames
 
     def test_roundtrip(self, nwbfile, guppy_module, events_table, roundtrip):
         guppy_module.add(events_table)
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["events"]
         assert list(read_table["event_name"].data) == ["port_entries"]
-        assert list(read_table["store_id"].data) == ["PrtN"]
-        assert list(read_table["store_label"].data) == ["port_entries"]
 
-    def test_optional_event_reference_roundtrip(self, nwbfile, guppy_module, roundtrip):
-        """The optional reference roundtrips, pointing at a core pynwb.event.EventsTable."""
-        events_table = EventsTable(name="PortEntries", description="port entry events")
-        events_table.add_row(timestamp=10.0)
-        events_table.add_row(timestamp=20.0)
-        nwbfile.add_events_table(events_table)
+    def test_optional_events_link_roundtrip(self, nwbfile, guppy_module, roundtrip):
+        """The optional ragged events DTR selects this type's occurrence rows in a merged EventsTable."""
+        merged = EventsTable(name="BehavioralEvents", description="all behavioral events, one merged table")
+        for timestamp in (10.0, 12.0, 20.0):  # rows 0, 1 are port_entries; row 2 is another type
+            merged.add_row(timestamp=timestamp)
+        nwbfile.add_events_table(merged)
 
-        table = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-        table.add_row(event_name="port_entries", event_description="Port entry events", events=events_table)
+        table = GuppyEventsTable(
+            name="events",
+            description="GuPPy behavioral events",
+            target_tables={"events": merged},
+        )
+        table.add_row(event_name="port_entries", events=[0, 1])
         guppy_module.add(table)
 
         read = roundtrip(nwbfile)
         read_table = read.processing["guppy"]["events"]
-        assert read_table["events"][0].name == "PortEntries"
+        # The ragged column is a VectorIndex over a DynamicTableRegion; check the stored target indices.
+        column = read_table["events"]
+        target_indices = column.target.data[:] if hasattr(column, "target") else column.data[:]
+        assert list(target_indices) == [0, 1]
+
+
+class TestGuppyValidSignalIntervals:
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        """Each valid interval is a row referencing its recording site via a DynamicTableRegion."""
+        guppy_module.add(recording_sites_table)
+        intervals = GuppyValidSignalIntervals(
+            name="valid_signal_intervals",
+            description="Valid (artifact-free) signal intervals per recording site.",
+            target_tables={"recording_site": recording_sites_table},
+        )
+        intervals.add_interval(start_time=0.0, stop_time=5.0, recording_site=0)
+        intervals.add_interval(start_time=7.0, stop_time=12.0, recording_site=0)
+        intervals.add_interval(start_time=1.0, stop_time=4.0, recording_site=1)
+        guppy_module.add(intervals)
+
+        read = roundtrip(nwbfile)
+        read_intervals = read.processing["guppy"]["valid_signal_intervals"]
+        np.testing.assert_array_equal(read_intervals["start_time"].data, [0.0, 7.0, 1.0])
+        np.testing.assert_array_equal(read_intervals["stop_time"].data, [5.0, 12.0, 4.0])
+        assert list(read_intervals["recording_site"].data) == [0, 0, 1]
 
 
 # --------------------------------------------------------------------------- #

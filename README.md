@@ -30,25 +30,23 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
 ### Registries
 
 - **`GuppyRecordingSitesTable`** (extends `DynamicTable`) — one row per GuPPy recording site (e.g. `dms`).
-  A recording site is a signal channel paired with its optional isosbestic control. Columns: `recording_site`
-  (the semantic name), optional `store_id` (the backend/hardware store id from `storesList.csv`, e.g. `Dv2A`),
-  optional `store_label` (the frontend/user-supplied store label, e.g. `signal_dms`), an optional ragged
-  `fiber_photometry_table_region` linking each recording site to its signal + isosbestic fiber rows in the
-  acquisition `FiberPhotometryTable` (anatomy is reached through this link, not duplicated), and an optional
-  ragged `valid_signal_intervals` column — an `obs_intervals`-style per-recording-site list of `[start, stop]`
-  artifact-free windows (exactly as core `Units` carries per-unit `obs_intervals`; the removal method is
-  recorded once on `GuppyParameters.artifacts_removal_method`).
+  A recording site is a signal channel paired with its optional isosbestic control. A slim registry: the
+  `recording_site` name plus an optional ragged `fiber_photometry_table_region` DTR linking each recording
+  site to its signal + isosbestic fiber rows in the acquisition `FiberPhotometryTable` (anatomy is reached
+  through this link, not duplicated). The fiber link is populated at conversion time by a converter that owns
+  the acquisition side.
 - **`GuppyEventsTable`** (extends `DynamicTable`) — one row per behavioral event GuPPy aligned to (e.g.
-  `port_entries`). Columns: `event_name`, `event_description`, optional `store_id`, optional `store_label`, and
-  an optional object reference `events` to the `pynwb.event.EventsTable` holding the event's onsets
-  (disambiguated by `event_name` when several events share one merged table).
+  `port_entries`). A slim registry: the `event_name` plus an optional ragged `events` DTR selecting this
+  event type's occurrence rows in the merged `pynwb.event.EventsTable` (in `nwbfile.events`). The events link
+  is populated at conversion time by a converter that merges every event type into one `EventsTable`.
 
 ### Derived traces
 
 - **`GuppyDerivedResponseSeries`** (extends `ndx_fiber_photometry.FiberPhotometryResponseSeries`) — a derived
   continuous trace (`control_fit`, `dff`, or `z_score`) for one recording site. Adds a `trace_type` attribute
-  and a `recording_site` reference into `GuppyRecordingSitesTable`; the inherited
-  `fiber_photometry_table_region` still carries the physical fiber provenance.
+  and a `recording_site` reference into `GuppyRecordingSitesTable`; the physical fiber provenance is reached
+  through that recording-site row (its `fiber_photometry_table_region`), so the inherited per-series
+  `fiber_photometry_table_region` is left unpopulated.
 
 ### Analysis products
 
@@ -72,8 +70,10 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   each mean metric is `(num_windows, num_events)` (`summary_event`), and the optional per-bin metrics carry a
   `bin_event` reference.
 
-Artifact-free valid-signal windows are **not** a separate object: they are a per-recording-site fact carried on
-`GuppyRecordingSitesTable` as the optional ragged `valid_signal_intervals` column described above.
+- **`GuppyValidSignalIntervals`** (extends `TimeIntervals`) — the `[start, stop]` windows GuPPy retained as
+  valid signal (not removed as artifacts) during preprocessing, one row per interval with a `recording_site`
+  `DynamicTableRegion` into `GuppyRecordingSitesTable`. The removal method is recorded once on
+  `GuppyParameters.artifacts_removal_method`.
 
 ### Parameters
 
@@ -133,13 +133,14 @@ nwbfile.add_lab_meta_data(
 # A processing module holds the registries and all derived products.
 module = nwbfile.create_processing_module(name="guppy", description="GuPPy-derived outputs")
 
-# Registries: recording-site and event identity, defined once.
+# Registries: recording-site and event identity, defined once. Slim by design — the fiber and event
+# links are populated at conversion time by a converter that owns the acquisition and events tables.
 recording_sites = GuppyRecordingSitesTable(name="recording_sites", description="GuPPy recording sites")
-recording_sites.add_row(recording_site="dms", store_id="Dv2A", store_label="signal_dms")
-recording_sites.add_row(recording_site="dls", store_id="Dv1A", store_label="signal_dls")
+recording_sites.add_row(recording_site="dms")
+recording_sites.add_row(recording_site="dls")
 
 events = GuppyEventsTable(name="events", description="GuPPy behavioral events")
-events.add_row(event_name="port_entries", event_description="Port entry events", store_id="PrtN", store_label="port_entries")
+events.add_row(event_name="port_entries")
 
 module.add(recording_sites)
 module.add(events)
@@ -239,19 +240,19 @@ classDiagram
         <<ndx-guppy>>
         --
         VectorData recording_site
-        VectorData store_id [optional]
-        VectorData store_label [optional]
         DynamicTableRegion fiber_photometry_table_region [optional, ragged]
-        VectorData valid_signal_intervals [optional, ragged, (num_intervals, 2)]
     }
     class GuppyEventsTable {
         <<ndx-guppy>>
         --
         VectorData event_name
-        VectorData event_description
-        VectorData store_id [optional]
-        VectorData store_label [optional]
-        object reference events [optional]
+        DynamicTableRegion events [optional, ragged]
+    }
+    class GuppyValidSignalIntervals {
+        <<ndx-guppy>>
+        TimeIntervals
+        --
+        DynamicTableRegion recording_site
     }
 
     class GuppyTransientsTable {
@@ -309,7 +310,9 @@ classDiagram
     GuppyCrossCorrelation ..> GuppyEventsTable : event
     GuppyPeakAUC ..> GuppyRecordingSitesTable : recording_site
     GuppyPeakAUC ..> GuppyEventsTable : event
+    GuppyValidSignalIntervals ..> GuppyRecordingSitesTable : recording_site
     GuppyRecordingSitesTable ..> FiberPhotometryTable : optional outward link (ragged)
+    GuppyEventsTable ..> EventsTable : optional outward link (ragged)
 ```
 
 ---
