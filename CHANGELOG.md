@@ -1,6 +1,13 @@
 # Changelog for ndx-guppy
 
-# v0.1.0 (Upcoming)
+# v0.1.1 (Upcoming)
+
+### Features
+
+### Fixes
+
+
+# v0.1.0 (July 16th, 2026)
 
 ### Features
 Initial release of 10 new neurodata types representing the derived outputs of the GuPPy fiber-photometry tool (one NWB file per session):

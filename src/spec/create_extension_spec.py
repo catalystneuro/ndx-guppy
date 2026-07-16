@@ -54,7 +54,7 @@ def event_region(doc, quantity=1, name="event"):
 def main():
     ns_builder = NWBNamespaceBuilder(
         name="""ndx-guppy""",
-        version="""0.1.0""",
+        version="""0.1.1""",
         doc="""NWB extension for the Guppy fiber photometry processing tool""",
         author=[
             "Paul Adkisson-Floro",
