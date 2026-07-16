@@ -173,6 +173,7 @@ module.add(transients)
 # three trials happen to be the same event, so num_events = 1.
 psth = GuppyPSTH(
     name="psth_dms_z_score",
+    description="Peri-event PSTH for the (dms, z_score) condition.",
     trace_type="z_score",
     baseline_corrected=True,
     unit="a.u.",
@@ -191,6 +192,7 @@ module.add(psth)
 # concatenated across events just like the PSTH.
 cross_correlation = GuppyCrossCorrelation(
     name="xcorr_z_score_dms_dls",
+    description="Cross-correlation for the (z_score, dms-dls) condition.",
     trace_type="z_score",
     unit="a.u.",
     recording_site=DynamicTableRegion(name="recording_site", data=[0, 1], description="dms, dls", table=recording_sites),

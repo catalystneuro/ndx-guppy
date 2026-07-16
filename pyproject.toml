@@ -13,7 +13,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "BSD-3-Clause"
 classifiers = [
-    # TODO: update these classifiers before release
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -32,10 +31,7 @@ keywords = [
 ]
 dependencies = [
     "pynwb>=4.0.0",  # 4.0.0 required for the core pynwb.event.EventsTable referenced by GuppyEventsTable
-    # TEMP: the GuppyEventsTable.events object reference to an EventsTable needs hdmf#1533 (fixes the
-    # rank-3 maxshape when writing a reference column targeting a DynamicTable). Merged to hdmf dev but
-    # not yet released; pin to the dev branch until the next hdmf release, then revert to a versioned pin.
-    "hdmf @ git+https://github.com/hdmf-dev/hdmf.git@dev",
+    "hdmf>=6.1.0",  # matches pynwb 4.0.0's floor; GuppyEventsTable.events is a DynamicTableRegion into EventsTable
     "ndx-fiber-photometry>=0.1.0",  # GuppyDerivedResponseSeries extends FiberPhotometryResponseSeries
 ]
 
@@ -43,9 +39,7 @@ dependencies = [
 # minimum versions of project dependencies for testing (see .github/workflows/run_all_tests.yml)
 test-min-deps = [
     "pynwb==4.0.0",
-    # TEMP: min viable hdmf is the dev branch carrying hdmf#1533 (unreleased). Revert to a pinned
-    # released version (e.g. hdmf==<next release>) once the fix ships. See the main dependencies note.
-    "hdmf @ git+https://github.com/hdmf-dev/hdmf.git@dev",
+    "hdmf==6.1.0",
     {include-group = "test"},
 ]
 
@@ -70,21 +64,15 @@ dev = [
     {include-group = "test"},
 ]
 
-# TODO: add URLs before release
-# [project.urls]
-# "Homepage" = "https://github.com/organization/package"
+[project.urls]
+"Homepage" = "https://github.com/catalystneuro/ndx-guppy"
+"Bug Tracker" = "https://github.com/catalystneuro/ndx-guppy/issues"
+"Changelog" = "https://github.com/catalystneuro/ndx-guppy/blob/main/CHANGELOG.md"
 # "Documentation" = "https://package.readthedocs.io/"
-# "Bug Tracker" = "https://github.com/organization/package/issues"
-# "Discussions" = "https://github.com/organization/package/discussions"
-# "Changelog" = "https://github.com/organization/package/blob/main/CHANGELOG.md"
+# "Discussions" = "https://github.com/catalystneuro/ndx-guppy/discussions"
 
 # Include only the source code under `src/pynwb/ndx_guppy` and the spec files under `spec`
 # in the wheel.
-[tool.hatch.metadata]
-# TEMP: required for the direct git reference to hdmf dev (see [project.dependencies]); drop this
-# once the hdmf pin reverts to a released version.
-allow-direct-references = true
-
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/pynwb/ndx_guppy",
