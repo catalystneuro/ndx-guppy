@@ -424,7 +424,10 @@ def main():
             ),
             NWBDatasetSpec(
                 name="mean",
-                doc="Across-trial mean cross-correlation at each lag, one column per event, shape (num_lags, num_events).",
+                doc=(
+                    "Across-trial mean cross-correlation at each lag, one column per event, "
+                    "shape (num_lags, num_events)."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_lags", "num_events"),
@@ -542,14 +545,20 @@ def main():
             ),
             NWBDatasetSpec(
                 name="peak_positive",
-                doc="Per-trial maximum within each window, shape (num_windows, num_trials), concatenated across events.",
+                doc=(
+                    "Per-trial maximum within each window, shape (num_windows, num_trials), "
+                    "concatenated across events."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_trials"),
             ),
             NWBDatasetSpec(
                 name="peak_negative",
-                doc="Per-trial minimum within each window, shape (num_windows, num_trials), concatenated across events.",
+                doc=(
+                    "Per-trial minimum within each window, shape (num_windows, num_trials), "
+                    "concatenated across events."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_trials"),
@@ -566,14 +575,20 @@ def main():
             ),
             NWBDatasetSpec(
                 name="mean_peak_positive",
-                doc="Across-trial-mean trace maximum within each window, one column per event, shape (num_windows, num_events).",
+                doc=(
+                    "Across-trial-mean trace maximum within each window, one column per event, "
+                    "shape (num_windows, num_events)."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_events"),
             ),
             NWBDatasetSpec(
                 name="mean_peak_negative",
-                doc="Across-trial-mean trace minimum within each window, one column per event, shape (num_windows, num_events).",
+                doc=(
+                    "Across-trial-mean trace minimum within each window, one column per event, "
+                    "shape (num_windows, num_events)."
+                ),
                 dtype="float64",
                 shape=(None, None),
                 dims=("num_windows", "num_events"),
