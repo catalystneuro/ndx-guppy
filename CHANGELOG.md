@@ -14,3 +14,6 @@ Initial release of 10 new neurodata types representing the derived outputs of th
 * `GuppyPSTH` holds the peri-event PSTH for one (recording_site, trace_type, baseline) condition, concatenated across events.
 * `GuppyCrossCorrelation` holds the cross-correlation between a recording-site pair for one trace_type, concatenated across events.
 * `GuppyPeakAUC` holds the peak and area-under-the-curve metrics for one (recording_site, trace_type) condition, concatenated across events.
+
+### Fixes
+* Fixed the ruff and Sphinx CI jobs (import ordering and doc-autogen namespace registration; no schema changes) [PR #1](https://github.com/catalystneuro/ndx-guppy/pull/1).
