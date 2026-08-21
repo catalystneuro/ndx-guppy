@@ -3,6 +3,7 @@
 # v0.2.0 (Upcoming)
 
 ### Features
+* `GuppyParameters` gained `use_transients_as_events`, recording that GuPPy stood each recording site's own detected transients in for external TTLs. Such an event needs no new type: it contributes one `GuppyEventsTable` row per (metric, recording site), each selecting its own site's occurrences [PR #6](https://github.com/catalystneuro/ndx-guppy/pull/6).
 * Added `GuppyTonicEpochs`, extending `TimeIntervals` to hold the mean level of each normalized trace within each of GuPPy's tonic epoch windows, one row per (recording_site, epoch, trace_type) [PR #4](https://github.com/catalystneuro/ndx-guppy/pull/4).
 
 ### Fixes
