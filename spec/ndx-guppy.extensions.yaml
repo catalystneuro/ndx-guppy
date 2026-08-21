@@ -570,6 +570,107 @@ groups:
     neurodata_type_inc: VectorData
     dtype: float64
     doc: Mean of the trace over the epoch window.
+- neurodata_type_def: GuppyBinnedMetrics
+  neurodata_type_inc: TimeIntervals
+  doc: 'Whole-session GuPPy metrics reduced to fixed-width time bins, for asking how
+    the signal tracks a slowly varying quantity rather than how it responds to an
+    event. One row per (recording_site, bin, trace_type): the bins are tiled per recording
+    site, and recording_site and trace_type vary per row, so they are columns. Sourced
+    from binned_metrics_<recording_site>.h5; the bin width is recorded once on GuppyParameters.binned_metrics_width.'
+  datasets:
+  - name: recording_site
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRecordingSitesTable row this bin applies to.
+  - name: trace_type
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: mean
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Mean of the trace over the bin, NaN for a bin holding no sample.
+  - name: transient_count
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Number of transients detected in the bin, NaN for a trace the transient
+      detector did not run on.
+  - name: n_samples
+    neurodata_type_inc: VectorData
+    dtype: int32
+    doc: Number of finite samples behind the mean. A property of the bin, so it 
+      repeats across that bin's rows; 0 for a bin lost to artifact removal.
+- neurodata_type_def: GuppyBinnedCovariates
+  neurodata_type_inc: TimeIntervals
+  doc: A behavioral covariate -- a continuous variable scored outside the rig --
+    averaged onto the same bins as GuppyBinnedMetrics. One row per 
+    (recording_site, bin, covariate). Sourced from 
+    binned_covariates_<recording_site>.h5.
+  datasets:
+  - name: recording_site
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRecordingSitesTable row whose bins this row is 
+      on.
+  - name: covariate
+    neurodata_type_inc: VectorData
+    dtype:
+      target_type: TimeSeries
+      reftype: object
+    doc: Reference to the TimeSeries holding this covariate's scored values, 
+      which is its identity.
+  - name: mean
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Mean of the covariate's scores over the bin, NaN for a bin holding no 
+      score.
+  - name: n_samples
+    neurodata_type_inc: VectorData
+    dtype: int32
+    doc: Number of the covariate's scores that fell in the bin.
+- neurodata_type_def: GuppyCovariateCorrelations
+  neurodata_type_inc: DynamicTable
+  doc: 'Correlation of each behavioral covariate against each per-bin GuPPy metric,
+    one row per (recording_site, trace_type, metric, covariate) -- naming exactly
+    the GuppyBinnedMetrics rows the coefficients were computed over. The coefficients
+    are descriptive: successive bins of both series are autocorrelated, which the
+    standard significance tests assume they are not, so GuPPy reports no p-value and
+    one must not be derived from these columns. Sourced from covariate_correlations_<recording_site>.h5.'
+  datasets:
+  - name: recording_site
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRecordingSitesTable row this correlation was 
+      computed on.
+  - name: trace_type
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: metric
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: "The GuppyBinnedMetrics column the covariate was correlated against. Controlled
+      vocabulary: 'mean' or 'transient_count'."
+  - name: covariate
+    neurodata_type_inc: VectorData
+    dtype:
+      target_type: TimeSeries
+      reftype: object
+    doc: Reference to the TimeSeries holding the correlated covariate's scored 
+      values.
+  - name: pearson_r
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Pearson correlation coefficient, NaN when either series is constant.
+  - name: spearman_rho
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Spearman rank correlation coefficient, NaN when either series is 
+      constant.
+  - name: n_bins
+    neurodata_type_inc: VectorData
+    dtype: int32
+    doc: Number of bins where both the metric and the covariate are present -- 
+      the sample size behind the two coefficients.
 - neurodata_type_def: GuppyParameters
   neurodata_type_inc: LabMetaData
   doc: Typed GuPPy processing parameters for the session (from 
@@ -643,6 +744,14 @@ groups:
   - name: baseline_correction_end
     dtype: float64
     doc: PSTH baseline-correction window end (seconds).
+    required: false
+  - name: compute_binned_metrics
+    dtype: bool
+    doc: Whether whole-session time-binned metrics were computed.
+    required: false
+  - name: binned_metrics_width
+    dtype: float64
+    doc: Width of the whole-session time bins (seconds).
     required: false
   datasets:
   - name: peak_start_points
