@@ -74,6 +74,10 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   valid signal (not removed as artifacts) during preprocessing, one row per interval with a `recording_site`
   `DynamicTableRegion` into `GuppyRecordingSitesTable`. The removal method is recorded once on
   `GuppyParameters.artifacts_removal_method`.
+- **`GuppyTonicEpochs`** (extends `TimeIntervals`) — the mean level of a normalized trace within each
+  user-defined tonic epoch window, one row per (recording_site, epoch, trace_type); columns
+  `recording_site`, `label`, `trace_type`, `mean`. The windows are defined per recording site, since
+  different sites can see a drug at different times.
 
 ### Parameters
 
@@ -257,6 +261,14 @@ classDiagram
         DynamicTableRegion recording_site
     }
 
+    class GuppyTonicEpochs {
+        <<ndx-guppy>>
+        TimeIntervals
+        --
+        DynamicTableRegion recording_site
+        VectorData label, trace_type, mean
+    }
+
     class GuppyTransientsTable {
         <<ndx-guppy>>
         --
@@ -313,6 +325,7 @@ classDiagram
     GuppyPeakAUC ..> GuppyRecordingSitesTable : recording_site
     GuppyPeakAUC ..> GuppyEventsTable : event
     GuppyValidSignalIntervals ..> GuppyRecordingSitesTable : recording_site
+    GuppyTonicEpochs ..> GuppyRecordingSitesTable : recording_site
     GuppyRecordingSitesTable ..> FiberPhotometryTable : optional outward link (ragged)
     GuppyEventsTable ..> EventsTable : optional outward link (ragged)
 ```

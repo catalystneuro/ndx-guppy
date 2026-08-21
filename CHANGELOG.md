@@ -1,6 +1,6 @@
 # Changelog for ndx-guppy
 
-# v0.1.1 (Upcoming)
+# v0.2.0 (Upcoming)
 
 ### Features
 
