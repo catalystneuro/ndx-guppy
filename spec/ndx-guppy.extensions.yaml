@@ -544,6 +544,32 @@ groups:
   - name: recording_site
     neurodata_type_inc: DynamicTableRegion
     doc: Reference to the GuppyRecordingSitesTable row this interval applies to.
+- neurodata_type_def: GuppyTonicEpochs
+  neurodata_type_inc: TimeIntervals
+  doc: 'Mean level of a GuPPy normalized trace within each user-defined tonic epoch
+    window, for pharmacological experiments that care about slow shifts in the overall
+    fluorescence level rather than event-triggered transients. One row per (recording_site,
+    epoch, trace_type): the windows are defined per recording site, and recording_site
+    and trace_type vary per row, so they are columns. Sourced from tonic_epochs_<recording_site>.csv
+    and tonic_<recording_site>.h5.'
+  datasets:
+  - name: recording_site
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRecordingSitesTable row this epoch window applies
+      to.
+  - name: label
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: The epoch's GuPPy label (e.g. 'baseline').
+  - name: trace_type
+    neurodata_type_inc: VectorData
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: mean
+    neurodata_type_inc: VectorData
+    dtype: float64
+    doc: Mean of the trace over the epoch window.
 - neurodata_type_def: GuppyParameters
   neurodata_type_inc: LabMetaData
   doc: Typed GuPPy processing parameters for the session (from 

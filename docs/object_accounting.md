@@ -22,6 +22,7 @@ indexed by some subset of these.
 | `n_features` | Trace types the *downstream analyses* run on | `_TRANSIENT_FEATURES` | **2** — `dff`, `z_score` |
 | `n_recording_site_pairs` | Recording-site pairs with a cross-correlation | `corr_*.h5` files | **1** — `(dls, dms)` |
 | `n_baselines` | PSTH baseline variants | corrected always; uncorrected optional | **2** — corrected + uncorrected |
+| `n_epochs` | Tonic epoch windows drawn on a recording site | `tonic_epochs_<R>.csv` files | **0** — the optional Tonic Analysis step was not run |
 
 Two subtleties worth calling out, because they explain otherwise-surprising counts:
 
@@ -61,6 +62,7 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 | `GuppyEventsTable` | `n_events` | **1** |
 | `GuppyTransientSummaryTable` | `n_recording_sites × n_features` (= 4 rows) | **1** |
 | `GuppyValidSignalIntervals` | Σ valid intervals over recording sites | **1** |
+| `GuppyTonicEpochs` | `Σ n_epochs over recording sites × n_features` | **1**, or 0 without tonic analysis |
 
 Valid-signal intervals (the artifact-free windows GuPPy keeps during preprocessing) are a
 per-recording-site fact carried in one `GuppyValidSignalIntervals` object (a `TimeIntervals`
@@ -69,6 +71,12 @@ subclass), one row per interval with a `recording_site` `DynamicTableRegion` bac
 recording-sites registry) so that registry can stay a slim, converter-buildable table of just
 names + links. The removal method is recorded once on
 `GuppyParameters.artifacts_removal_method`, not re-embedded here.
+
+Tonic epoch means follow the same rule from the other direction: the result per
+(recording site, epoch, trace type) is a single scalar, so all three axes collapse into the rows
+of one `GuppyTonicEpochs` object (also a `TimeIntervals` subclass) rather than splitting on
+`trace_type` the way the array-valued products do. It exists only for a session that ran the
+optional Tonic Analysis step.
 
 ### Per-condition objects — axes that carry arrays
 
@@ -97,6 +105,9 @@ peak / AUC          4   = n_recording_sites · n_features
                   ───
 total              29
 ```
+
+The fixture ran no tonic analysis, so `GuppyTonicEpochs` contributes 0 here; a session that ran it
+adds exactly one more object, whatever `n_epochs` is.
 
 No multiplicity carries `n_events`, so adding behavioral events does not add objects — it adds
 *columns* to the existing PSTH/peak-AUC/cross-correlation objects. Before the events axis was

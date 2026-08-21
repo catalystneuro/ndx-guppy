@@ -23,6 +23,7 @@ from ndx_guppy import (
     GuppyCrossCorrelation,
     GuppyPeakAUC,
     GuppyValidSignalIntervals,
+    GuppyTonicEpochs,
     GuppyParameters,
 )
 
@@ -189,6 +190,66 @@ class TestGuppyValidSignalIntervals:
         np.testing.assert_array_equal(read_intervals["start_time"].data, [0.0, 7.0, 1.0])
         np.testing.assert_array_equal(read_intervals["stop_time"].data, [5.0, 12.0, 4.0])
         assert list(read_intervals["recording_site"].data) == [0, 0, 1]
+
+
+class TestGuppyTonicEpochs:
+    @staticmethod
+    def _build(recording_sites_table):
+        """Two epochs on 'dms' and one on 'dls', each with a z-score and a dF/F mean."""
+        epochs = GuppyTonicEpochs(
+            name="tonic_epochs",
+            description="Mean trace level within each tonic epoch window.",
+            target_tables={"recording_site": recording_sites_table},
+        )
+        epochs.add_interval(
+            start_time=0.0, stop_time=600.0, label="baseline", trace_type="z_score", mean=-0.12, recording_site=0
+        )
+        epochs.add_interval(
+            start_time=0.0, stop_time=600.0, label="baseline", trace_type="dff", mean=0.004, recording_site=0
+        )
+        epochs.add_interval(
+            start_time=600.0,
+            stop_time=1800.0,
+            label="post_injection",
+            trace_type="z_score",
+            mean=1.83,
+            recording_site=0,
+        )
+        epochs.add_interval(
+            start_time=600.0, stop_time=1800.0, label="post_injection", trace_type="dff", mean=0.061, recording_site=0
+        )
+        epochs.add_interval(
+            start_time=0.0, stop_time=900.0, label="baseline", trace_type="z_score", mean=-0.05, recording_site=1
+        )
+        return epochs
+
+    def test_constructor(self, recording_sites_table):
+        epochs = self._build(recording_sites_table)
+        assert list(epochs["label"].data) == ["baseline", "baseline", "post_injection", "post_injection", "baseline"]
+        assert list(epochs["trace_type"].data) == ["z_score", "dff", "z_score", "dff", "z_score"]
+        np.testing.assert_allclose(epochs["mean"].data, [-0.12, 0.004, 1.83, 0.061, -0.05])
+
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        """Each row is one (recording_site, epoch, trace_type) mean over its window."""
+        guppy_module.add(recording_sites_table)
+        guppy_module.add(self._build(recording_sites_table))
+
+        read = roundtrip(nwbfile)
+        read_epochs = read.processing["guppy"]["tonic_epochs"]
+        np.testing.assert_array_equal(read_epochs["start_time"].data, [0.0, 0.0, 600.0, 600.0, 0.0])
+        np.testing.assert_array_equal(read_epochs["stop_time"].data, [600.0, 600.0, 1800.0, 1800.0, 900.0])
+        assert list(read_epochs["label"].data) == [
+            "baseline",
+            "baseline",
+            "post_injection",
+            "post_injection",
+            "baseline",
+        ]
+        assert list(read_epochs["trace_type"].data) == ["z_score", "dff", "z_score", "dff", "z_score"]
+        np.testing.assert_allclose(read_epochs["mean"].data, [-0.12, 0.004, 1.83, 0.061, -0.05])
+        assert list(read_epochs["recording_site"].data) == [0, 0, 0, 0, 1]
+        # The reference resolves back to the recording sites registry.
+        assert read_epochs["recording_site"].table["recording_site"].data[1] == "dls"
 
 
 # --------------------------------------------------------------------------- #
@@ -456,8 +517,6 @@ class TestGuppyPeakAUC:
         assert read_peak_auc.bin_edges.attrs["bin_basis"] == "trials"
         assert read_peak_auc.binned_peak_positive.shape == (2, 3)
         assert list(read_peak_auc.bin_event.data) == [0, 0, 1]
-
-
 
 
 # --------------------------------------------------------------------------- #

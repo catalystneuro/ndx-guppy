@@ -54,7 +54,7 @@ def event_region(doc, quantity=1, name="event"):
 def main():
     ns_builder = NWBNamespaceBuilder(
         name="""ndx-guppy""",
-        version="""0.1.1""",
+        version="""0.2.0""",
         doc="""NWB extension for the Guppy fiber photometry processing tool""",
         author=[
             "Paul Adkisson-Floro",
@@ -682,6 +682,44 @@ def main():
         ],
     )
 
+    guppy_tonic_epochs = NWBGroupSpec(
+        neurodata_type_def="GuppyTonicEpochs",
+        neurodata_type_inc="TimeIntervals",
+        doc=(
+            "Mean level of a GuPPy normalized trace within each user-defined tonic epoch window, for "
+            "pharmacological experiments that care about slow shifts in the overall fluorescence level "
+            "rather than event-triggered transients. One row per (recording_site, epoch, trace_type): "
+            "the windows are defined per recording site, and recording_site and trace_type vary per row, "
+            "so they are columns. Sourced from tonic_epochs_<recording_site>.csv and "
+            "tonic_<recording_site>.h5."
+        ),
+        datasets=[
+            NWBDatasetSpec(
+                name="recording_site",
+                neurodata_type_inc="DynamicTableRegion",
+                doc="Reference to the GuppyRecordingSitesTable row this epoch window applies to.",
+            ),
+            NWBDatasetSpec(
+                name="label",
+                neurodata_type_inc="VectorData",
+                doc="The epoch's GuPPy label (e.g. 'baseline').",
+                dtype="text",
+            ),
+            NWBDatasetSpec(
+                name="trace_type",
+                neurodata_type_inc="VectorData",
+                doc=TRACE_TYPE_DOC,
+                dtype="text",
+            ),
+            NWBDatasetSpec(
+                name="mean",
+                neurodata_type_inc="VectorData",
+                doc="Mean of the trace over the epoch window.",
+                dtype="float64",
+            ),
+        ],
+    )
+
     # ------------------------------------------------------------------ #
     # Parameters
     # ------------------------------------------------------------------ #
@@ -761,6 +799,7 @@ def main():
         guppy_cross_correlation,
         guppy_peak_auc,
         guppy_valid_signal_intervals,
+        guppy_tonic_epochs,
         guppy_parameters,
     ]
 
