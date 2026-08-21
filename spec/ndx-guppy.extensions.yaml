@@ -644,6 +644,11 @@ groups:
     dtype: float64
     doc: PSTH baseline-correction window end (seconds).
     required: false
+  - name: use_transients_as_events
+    dtype: bool
+    doc: Whether detected transients stood in for behavioral events (spontaneous
+      mode).
+    required: false
   datasets:
   - name: peak_start_points
     dtype: float64

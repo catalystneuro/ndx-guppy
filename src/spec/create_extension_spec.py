@@ -768,6 +768,12 @@ def main():
             ),
             opt_float("baseline_correction_start", "PSTH baseline-correction window start (seconds)."),
             opt_float("baseline_correction_end", "PSTH baseline-correction window end (seconds)."),
+            NWBAttributeSpec(
+                name="use_transients_as_events",
+                doc="Whether detected transients stood in for behavioral events (spontaneous mode).",
+                dtype="bool",
+                required=False,
+            ),
         ],
         datasets=[
             NWBDatasetSpec(

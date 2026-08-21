@@ -39,6 +39,9 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   `port_entries`). A slim registry: the `event_name` plus an optional ragged `events` DTR selecting this
   event type's occurrence rows in the merged `pynwb.event.EventsTable` (in `nwbfile.events`). The events link
   is populated at conversion time by a converter that merges every event type into one `EventsTable`.
+  A GuPPy session run in **spontaneous mode** aligns to its own detected transients instead of to external
+  TTLs, and those trains are per recording site, so such an event contributes one row per
+  (metric, recording site), each selecting its own site's occurrences.
 
 ### Derived traces
 

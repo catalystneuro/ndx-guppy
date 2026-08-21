@@ -59,7 +59,7 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 |---|---|---|
 | `GuppyParameters` (LabMetaData) | — (one parameter set/session) | **1** |
 | `GuppyRecordingSitesTable` | `n_recording_sites` | **1** |
-| `GuppyEventsTable` | `n_events` | **1** |
+| `GuppyEventsTable` | `n_events`, plus one row per (transient metric, recording site) in spontaneous mode | **1** |
 | `GuppyTransientSummaryTable` | `n_recording_sites × n_features` (= 4 rows) | **1** |
 | `GuppyValidSignalIntervals` | Σ valid intervals over recording sites | **1** |
 | `GuppyTonicEpochs` | `Σ n_epochs over recording sites × n_features` | **1**, or 0 without tonic analysis |
@@ -77,6 +77,11 @@ Tonic epoch means follow the same rule from the other direction: the result per
 of one `GuppyTonicEpochs` object (also a `TimeIntervals` subclass) rather than splitting on
 `trace_type` the way the array-valued products do. It exists only for a session that ran the
 optional Tonic Analysis step.
+
+GuPPy's spontaneous mode adds no object either. It aligns the peri-event products to the transients
+detected in each recording site's own trace rather than to external TTLs, which is just another event as
+far as the products are concerned. Those trains differ per recording site, so the events registry gains one
+row per (metric, recording site), each selecting its own site's occurrences.
 
 ### Per-condition objects — axes that carry arrays
 
