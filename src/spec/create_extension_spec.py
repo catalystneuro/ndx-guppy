@@ -22,6 +22,7 @@ from pynwb.spec import (
     NWBGroupSpec,
     NWBDatasetSpec,
     NWBAttributeSpec,
+    NWBRefSpec,
 )
 
 # Controlled vocabulary for the ``trace_type`` attribute, documented (not hard-enforced) so a
@@ -40,6 +41,20 @@ def trace_type_attr():
 def recording_site_region(doc, quantity=1):
     """A ``DynamicTableRegion`` referencing rows of the ``GuppyRecordingSitesTable``."""
     return NWBDatasetSpec(name="recording_site", neurodata_type_inc="DynamicTableRegion", doc=doc, quantity=quantity)
+
+
+def covariate_reference(doc):
+    """A column of object references to the ``TimeSeries`` holding a covariate's scored values.
+
+    The series the interface writes is the covariate's identity, so the covariate products point at it
+    rather than re-spelling its name.
+    """
+    return NWBDatasetSpec(
+        name="covariate",
+        neurodata_type_inc="VectorData",
+        doc=doc,
+        dtype=NWBRefSpec(target_type="TimeSeries", reftype="object"),
+    )
 
 
 def event_region(doc, quantity=1, name="event"):
@@ -720,6 +735,145 @@ def main():
         ],
     )
 
+    guppy_binned_metrics = NWBGroupSpec(
+        neurodata_type_def="GuppyBinnedMetrics",
+        neurodata_type_inc="TimeIntervals",
+        doc=(
+            "Whole-session GuPPy metrics reduced to fixed-width time bins, for asking how the signal "
+            "tracks a slowly varying quantity rather than how it responds to an event. One row per "
+            "(recording_site, bin, trace_type): the bins are tiled per recording site, and "
+            "recording_site and trace_type vary per row, so they are columns. Sourced from "
+            "binned_metrics_<recording_site>.h5; the bin width is recorded once on "
+            "GuppyParameters.binned_metrics_width."
+        ),
+        datasets=[
+            NWBDatasetSpec(
+                name="recording_site",
+                neurodata_type_inc="DynamicTableRegion",
+                doc="Reference to the GuppyRecordingSitesTable row this bin applies to.",
+            ),
+            NWBDatasetSpec(
+                name="trace_type",
+                neurodata_type_inc="VectorData",
+                doc=TRACE_TYPE_DOC,
+                dtype="text",
+            ),
+            NWBDatasetSpec(
+                name="mean",
+                neurodata_type_inc="VectorData",
+                doc="Mean of the trace over the bin, NaN for a bin holding no sample.",
+                dtype="float64",
+            ),
+            NWBDatasetSpec(
+                name="transient_count",
+                neurodata_type_inc="VectorData",
+                doc=(
+                    "Number of transients detected in the bin, NaN for a trace the transient detector "
+                    "did not run on."
+                ),
+                dtype="float64",
+            ),
+            NWBDatasetSpec(
+                name="n_samples",
+                neurodata_type_inc="VectorData",
+                doc=(
+                    "Number of finite samples behind the mean. A property of the bin, so it repeats "
+                    "across that bin's rows; 0 for a bin lost to artifact removal."
+                ),
+                dtype="int32",
+            ),
+        ],
+    )
+
+    guppy_binned_covariates = NWBGroupSpec(
+        neurodata_type_def="GuppyBinnedCovariates",
+        neurodata_type_inc="TimeIntervals",
+        doc=(
+            "A behavioral covariate -- a continuous variable scored outside the rig -- averaged onto the "
+            "same bins as GuppyBinnedMetrics. One row per (recording_site, bin, covariate). Sourced from "
+            "binned_covariates_<recording_site>.h5."
+        ),
+        datasets=[
+            NWBDatasetSpec(
+                name="recording_site",
+                neurodata_type_inc="DynamicTableRegion",
+                doc="Reference to the GuppyRecordingSitesTable row whose bins this row is on.",
+            ),
+            covariate_reference(
+                "Reference to the TimeSeries holding this covariate's scored values, which is its identity."
+            ),
+            NWBDatasetSpec(
+                name="mean",
+                neurodata_type_inc="VectorData",
+                doc="Mean of the covariate's scores over the bin, NaN for a bin holding no score.",
+                dtype="float64",
+            ),
+            NWBDatasetSpec(
+                name="n_samples",
+                neurodata_type_inc="VectorData",
+                doc="Number of the covariate's scores that fell in the bin.",
+                dtype="int32",
+            ),
+        ],
+    )
+
+    guppy_covariate_correlations = NWBGroupSpec(
+        neurodata_type_def="GuppyCovariateCorrelations",
+        neurodata_type_inc="DynamicTable",
+        doc=(
+            "Correlation of each behavioral covariate against each per-bin GuPPy metric, one row per "
+            "(recording_site, trace_type, metric, covariate) -- naming exactly the GuppyBinnedMetrics "
+            "rows the coefficients were computed over. The coefficients are descriptive: successive "
+            "bins of both series are autocorrelated, which the standard significance tests assume they "
+            "are not, so GuPPy reports no p-value and one must not be derived from these columns. "
+            "Sourced from covariate_correlations_<recording_site>.h5."
+        ),
+        datasets=[
+            NWBDatasetSpec(
+                name="recording_site",
+                neurodata_type_inc="DynamicTableRegion",
+                doc="Reference to the GuppyRecordingSitesTable row this correlation was computed on.",
+            ),
+            NWBDatasetSpec(
+                name="trace_type",
+                neurodata_type_inc="VectorData",
+                doc=TRACE_TYPE_DOC,
+                dtype="text",
+            ),
+            NWBDatasetSpec(
+                name="metric",
+                neurodata_type_inc="VectorData",
+                doc=(
+                    "The GuppyBinnedMetrics column the covariate was correlated against. Controlled "
+                    "vocabulary: 'mean' or 'transient_count'."
+                ),
+                dtype="text",
+            ),
+            covariate_reference("Reference to the TimeSeries holding the correlated covariate's scored values."),
+            NWBDatasetSpec(
+                name="pearson_r",
+                neurodata_type_inc="VectorData",
+                doc="Pearson correlation coefficient, NaN when either series is constant.",
+                dtype="float64",
+            ),
+            NWBDatasetSpec(
+                name="spearman_rho",
+                neurodata_type_inc="VectorData",
+                doc="Spearman rank correlation coefficient, NaN when either series is constant.",
+                dtype="float64",
+            ),
+            NWBDatasetSpec(
+                name="n_bins",
+                neurodata_type_inc="VectorData",
+                doc=(
+                    "Number of bins where both the metric and the covariate are present -- the sample "
+                    "size behind the two coefficients."
+                ),
+                dtype="int32",
+            ),
+        ],
+    )
+
     # ------------------------------------------------------------------ #
     # Parameters
     # ------------------------------------------------------------------ #
@@ -768,6 +922,13 @@ def main():
             ),
             opt_float("baseline_correction_start", "PSTH baseline-correction window start (seconds)."),
             opt_float("baseline_correction_end", "PSTH baseline-correction window end (seconds)."),
+            NWBAttributeSpec(
+                name="compute_binned_metrics",
+                doc="Whether whole-session time-binned metrics were computed.",
+                dtype="bool",
+                required=False,
+            ),
+            opt_float("binned_metrics_width", "Width of the whole-session time bins (seconds)."),
         ],
         datasets=[
             NWBDatasetSpec(
@@ -800,6 +961,9 @@ def main():
         guppy_peak_auc,
         guppy_valid_signal_intervals,
         guppy_tonic_epochs,
+        guppy_binned_metrics,
+        guppy_binned_covariates,
+        guppy_covariate_correlations,
         guppy_parameters,
     ]
 
