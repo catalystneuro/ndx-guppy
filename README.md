@@ -81,6 +81,17 @@ column on a registry. A GuPPy file can therefore stand alone or be fully wired t
   user-defined tonic epoch window, one row per (recording_site, epoch, trace_type); columns
   `recording_site`, `label`, `trace_type`, `mean`. The windows are defined per recording site, since
   different sites can see a drug at different times.
+- **`GuppyBinnedMetrics`** (extends `TimeIntervals`) — the whole session reduced to fixed-width time bins,
+  one row per (recording_site, bin, trace_type); columns `recording_site`, `trace_type`, `mean`,
+  `transient_count`, `n_samples`. The bin width is recorded once on `GuppyParameters.binned_metrics_width`.
+- **`GuppyBinnedCovariates`** (extends `TimeIntervals`) — a behavioral covariate, a variable scored outside
+  the rig, averaged onto those same bins, one row per (recording_site, bin, covariate); columns
+  `recording_site`, `covariate`, `mean`, `n_samples`. The `covariate` column is an **object reference** to
+  the `TimeSeries` holding that covariate's scores, which is its identity — there is no covariate registry.
+- **`GuppyCovariateCorrelations`** (extends `DynamicTable`) — each covariate correlated against each per-bin
+  metric, one row per (recording_site, trace_type, metric, covariate); columns `pearson_r`, `spearman_rho`,
+  `n_bins`. The coefficients are descriptive: successive bins of both series are autocorrelated, so GuPPy
+  reports no p-value and one must not be derived from these columns.
 
 ### Parameters
 
@@ -272,6 +283,28 @@ classDiagram
         VectorData label, trace_type, mean
     }
 
+    class GuppyBinnedMetrics {
+        <<ndx-guppy>>
+        TimeIntervals
+        --
+        DynamicTableRegion recording_site
+        VectorData trace_type, mean, transient_count, n_samples
+    }
+    class GuppyBinnedCovariates {
+        <<ndx-guppy>>
+        TimeIntervals
+        --
+        DynamicTableRegion recording_site
+        VectorData covariate (object reference), mean, n_samples
+    }
+    class GuppyCovariateCorrelations {
+        <<ndx-guppy>>
+        --
+        DynamicTableRegion recording_site
+        VectorData trace_type, metric, covariate (object reference)
+        VectorData pearson_r, spearman_rho, n_bins
+    }
+
     class GuppyTransientsTable {
         <<ndx-guppy>>
         --
@@ -329,6 +362,11 @@ classDiagram
     GuppyPeakAUC ..> GuppyEventsTable : event
     GuppyValidSignalIntervals ..> GuppyRecordingSitesTable : recording_site
     GuppyTonicEpochs ..> GuppyRecordingSitesTable : recording_site
+    GuppyBinnedMetrics ..> GuppyRecordingSitesTable : recording_site
+    GuppyBinnedCovariates ..> GuppyRecordingSitesTable : recording_site
+    GuppyBinnedCovariates ..> TimeSeries : covariate (object reference)
+    GuppyCovariateCorrelations ..> GuppyRecordingSitesTable : recording_site
+    GuppyCovariateCorrelations ..> TimeSeries : covariate (object reference)
     GuppyRecordingSitesTable ..> FiberPhotometryTable : optional outward link (ragged)
     GuppyEventsTable ..> EventsTable : optional outward link (ragged)
 ```

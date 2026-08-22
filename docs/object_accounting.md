@@ -23,6 +23,8 @@ indexed by some subset of these.
 | `n_recording_site_pairs` | Recording-site pairs with a cross-correlation | `corr_*.h5` files | **1** — `(dls, dms)` |
 | `n_baselines` | PSTH baseline variants | corrected always; uncorrected optional | **2** — corrected + uncorrected |
 | `n_epochs` | Tonic epoch windows drawn on a recording site | `tonic_epochs_<R>.csv` files | **0** — the optional Tonic Analysis step was not run |
+| `n_bins` | Fixed-width time bins a recording site is tiled into | `binned_metrics_<R>.h5` files | **0** — **Compute Binned Metrics?** was off |
+| `n_covariates` | Behavioral covariates scored alongside the session | `covariate_<name>` stores in `storesList.csv` | **0** — no covariate was labeled |
 
 Two subtleties worth calling out, because they explain otherwise-surprising counts:
 
@@ -63,6 +65,9 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 | `GuppyTransientSummaryTable` | `n_recording_sites × n_features` (= 4 rows) | **1** |
 | `GuppyValidSignalIntervals` | Σ valid intervals over recording sites | **1** |
 | `GuppyTonicEpochs` | `Σ n_epochs over recording sites × n_features` | **1**, or 0 without tonic analysis |
+| `GuppyBinnedMetrics` | `Σ n_bins over recording sites × n_features` | **1**, or 0 without binned metrics |
+| `GuppyBinnedCovariates` | `Σ n_bins over recording sites × n_covariates` | **1**, or 0 without covariates |
+| `GuppyCovariateCorrelations` | `Σ over recording sites of (binned-metric columns × n_covariates)` | **1**, or 0 without covariates |
 
 Valid-signal intervals (the artifact-free windows GuPPy keeps during preprocessing) are a
 per-recording-site fact carried in one `GuppyValidSignalIntervals` object (a `TimeIntervals`
@@ -78,10 +83,20 @@ of one `GuppyTonicEpochs` object (also a `TimeIntervals` subclass) rather than s
 `trace_type` the way the array-valued products do. It exists only for a session that ran the
 optional Tonic Analysis step.
 
+Tonic epoch means, binned metrics and covariate correlations follow the same rule from the other
+direction: each result is a single scalar per combination, so every axis collapses into the rows of
+one object rather than splitting on `trace_type` the way the array-valued products do. Each exists
+only for a session that ran the optional step behind it.
+
 GuPPy's spontaneous mode adds no object either. It aligns the peri-event products to the transients
 detected in each recording site's own trace rather than to external TTLs, which is just another event as
 far as the products are concerned. Those trains differ per recording site, so the events registry gains one
 row per (metric, recording site), each selecting its own site's occurrences.
+
+A behavioral covariate is the one entity here with **no registry**. The interface writes each
+covariate's scored values as a plain `TimeSeries`, so that object is the covariate's identity, and the
+two covariate products carry an object reference to it rather than re-spelling its name. A registry
+would add a name column pointing at an object the same writer controls.
 
 ### Per-condition objects — axes that carry arrays
 
@@ -111,8 +126,10 @@ peak / AUC          4   = n_recording_sites · n_features
 total              29
 ```
 
-The fixture ran no tonic analysis, so `GuppyTonicEpochs` contributes 0 here; a session that ran it
-adds exactly one more object, whatever `n_epochs` is.
+The fixture ran none of the optional steps, so `GuppyTonicEpochs`, `GuppyBinnedMetrics`,
+`GuppyBinnedCovariates` and `GuppyCovariateCorrelations` contribute 0 here. Each adds exactly one
+object to a session that ran it, whatever `n_epochs`, `n_bins` and `n_covariates` are — plus one
+`TimeSeries` per covariate.
 
 No multiplicity carries `n_events`, so adding behavioral events does not add objects — it adds
 *columns* to the existing PSTH/peak-AUC/cross-correlation objects. Before the events axis was

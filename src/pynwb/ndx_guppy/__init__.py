@@ -31,6 +31,9 @@ GuppyCrossCorrelation = get_class("GuppyCrossCorrelation", "ndx-guppy")
 GuppyPeakAUC = get_class("GuppyPeakAUC", "ndx-guppy")
 GuppyValidSignalIntervals = get_class("GuppyValidSignalIntervals", "ndx-guppy")
 GuppyTonicEpochs = get_class("GuppyTonicEpochs", "ndx-guppy")
+GuppyBinnedMetrics = get_class("GuppyBinnedMetrics", "ndx-guppy")
+GuppyBinnedCovariates = get_class("GuppyBinnedCovariates", "ndx-guppy")
+GuppyCovariateCorrelations = get_class("GuppyCovariateCorrelations", "ndx-guppy")
 
 # Parameters
 GuppyParameters = get_class("GuppyParameters", "ndx-guppy")
@@ -46,6 +49,9 @@ __all__ = [
     "GuppyPeakAUC",
     "GuppyValidSignalIntervals",
     "GuppyTonicEpochs",
+    "GuppyBinnedMetrics",
+    "GuppyBinnedCovariates",
+    "GuppyCovariateCorrelations",
     "GuppyParameters",
 ]
 

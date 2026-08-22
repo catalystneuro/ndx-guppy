@@ -7,7 +7,7 @@ The tests are organized one ``Test<ClassName>`` class per neurodata type. Shared
 import numpy as np
 import pytest
 
-from pynwb import NWBHDF5IO
+from pynwb import NWBHDF5IO, TimeSeries
 from pynwb.event import EventsTable
 from pynwb.testing.mock.file import mock_NWBFile
 from hdmf.common import DynamicTable, VectorData
@@ -24,6 +24,9 @@ from ndx_guppy import (
     GuppyPeakAUC,
     GuppyValidSignalIntervals,
     GuppyTonicEpochs,
+    GuppyBinnedMetrics,
+    GuppyBinnedCovariates,
+    GuppyCovariateCorrelations,
     GuppyParameters,
 )
 
@@ -75,6 +78,18 @@ def events_table():
 @pytest.fixture
 def multi_events_table():
     return build_multi_events_table()
+
+
+@pytest.fixture
+def covariate_series():
+    """The TimeSeries a behavioral covariate's scores live in, which the covariate products reference."""
+    return TimeSeries(
+        name="akinesia",
+        description="Akinesia severity, scored every two minutes.",
+        data=[2.0, 3.0, 4.0],
+        unit="a.u.",
+        timestamps=[0.0, 120.0, 240.0],
+    )
 
 
 @pytest.fixture
@@ -250,6 +265,143 @@ class TestGuppyTonicEpochs:
         assert list(read_epochs["recording_site"].data) == [0, 0, 0, 0, 1]
         # The reference resolves back to the recording sites registry.
         assert read_epochs["recording_site"].table["recording_site"].data[1] == "dls"
+
+
+class TestGuppyBinnedMetrics:
+    @staticmethod
+    def _build(recording_sites_table):
+        """Two bins on 'dms', each reduced to a z-score and a dF/F row."""
+        binned = GuppyBinnedMetrics(
+            name="binned_metrics",
+            description="GuPPy metrics reduced to fixed-width time bins.",
+            target_tables={"recording_site": recording_sites_table},
+        )
+        binned.add_interval(
+            start_time=0.0,
+            stop_time=60.0,
+            trace_type="z_score",
+            mean=0.4,
+            transient_count=3.0,
+            n_samples=600,
+            recording_site=0,
+        )
+        # The detector did not run on dF/F, so that trace has no count.
+        binned.add_interval(
+            start_time=0.0,
+            stop_time=60.0,
+            trace_type="dff",
+            mean=0.02,
+            transient_count=float("nan"),
+            n_samples=600,
+            recording_site=0,
+        )
+        binned.add_interval(
+            start_time=60.0,
+            stop_time=95.0,
+            trace_type="z_score",
+            mean=-0.7,
+            transient_count=1.0,
+            n_samples=350,
+            recording_site=0,
+        )
+        return binned
+
+    def test_constructor(self, recording_sites_table):
+        binned = self._build(recording_sites_table)
+        assert list(binned["trace_type"].data) == ["z_score", "dff", "z_score"]
+        np.testing.assert_allclose(binned["mean"].data, [0.4, 0.02, -0.7])
+
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, roundtrip):
+        """Each row is one (recording_site, bin, trace_type); the short final bin keeps its true bounds."""
+        guppy_module.add(recording_sites_table)
+        guppy_module.add(self._build(recording_sites_table))
+
+        read = roundtrip(nwbfile)
+        read_binned = read.processing["guppy"]["binned_metrics"]
+        np.testing.assert_array_equal(read_binned["start_time"].data, [0.0, 0.0, 60.0])
+        np.testing.assert_array_equal(read_binned["stop_time"].data, [60.0, 60.0, 95.0])
+        assert list(read_binned["trace_type"].data) == ["z_score", "dff", "z_score"]
+        np.testing.assert_allclose(read_binned["mean"].data, [0.4, 0.02, -0.7])
+        np.testing.assert_allclose(read_binned["transient_count"].data, [3.0, np.nan, 1.0])
+        assert list(read_binned["n_samples"].data) == [600, 600, 350]
+        assert list(read_binned["recording_site"].data) == [0, 0, 0]
+
+
+class TestGuppyBinnedCovariates:
+    @staticmethod
+    def _build(recording_sites_table, covariate_series):
+        """One covariate averaged onto two bins of 'dms'."""
+        binned = GuppyBinnedCovariates(
+            name="binned_covariates",
+            description="A behavioral covariate averaged onto the binned-metrics bins.",
+            target_tables={"recording_site": recording_sites_table},
+        )
+        binned.add_interval(
+            start_time=0.0, stop_time=60.0, covariate=covariate_series, mean=2.5, n_samples=2, recording_site=0
+        )
+        # A bin holding no score reads NaN with a count of 0.
+        binned.add_interval(
+            start_time=60.0,
+            stop_time=95.0,
+            covariate=covariate_series,
+            mean=float("nan"),
+            n_samples=0,
+            recording_site=0,
+        )
+        return binned
+
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, covariate_series, roundtrip):
+        """The covariate column references the TimeSeries holding its scores, which is its identity."""
+        guppy_module.add(recording_sites_table)
+        guppy_module.add(covariate_series)
+        guppy_module.add(self._build(recording_sites_table, covariate_series))
+
+        read = roundtrip(nwbfile)
+        read_binned = read.processing["guppy"]["binned_covariates"]
+        np.testing.assert_array_equal(read_binned["start_time"].data, [0.0, 60.0])
+        np.testing.assert_allclose(read_binned["mean"].data, [2.5, np.nan])
+        assert list(read_binned["n_samples"].data) == [2, 0]
+        assert [reference.name for reference in read_binned["covariate"].data] == ["akinesia", "akinesia"]
+        np.testing.assert_allclose(read_binned["covariate"].data[0].data[:], [2.0, 3.0, 4.0])
+
+
+class TestGuppyCovariateCorrelations:
+    @staticmethod
+    def _build(recording_sites_table, covariate_series):
+        """One covariate correlated against the two metrics of one trace type."""
+        correlations = GuppyCovariateCorrelations(
+            name="covariate_correlations",
+            description="Descriptive correlations of a covariate against the per-bin metrics.",
+            target_tables={"recording_site": recording_sites_table},
+        )
+        for metric, pearson_r, spearman_rho, n_bins in (("mean", 0.62, 0.5, 12), ("transient_count", -0.31, -0.4, 12)):
+            correlations.add_row(
+                recording_site=0,
+                trace_type="z_score",
+                metric=metric,
+                covariate=covariate_series,
+                pearson_r=pearson_r,
+                spearman_rho=spearman_rho,
+                n_bins=n_bins,
+            )
+        return correlations
+
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, covariate_series, roundtrip):
+        """Each row names the (trace_type, metric) whose bins the coefficients were computed over."""
+        guppy_module.add(recording_sites_table)
+        guppy_module.add(covariate_series)
+        guppy_module.add(self._build(recording_sites_table, covariate_series))
+
+        read = roundtrip(nwbfile)
+        read_correlations = read.processing["guppy"]["covariate_correlations"]
+        assert list(read_correlations["trace_type"].data) == ["z_score", "z_score"]
+        assert list(read_correlations["metric"].data) == ["mean", "transient_count"]
+        np.testing.assert_allclose(read_correlations["pearson_r"].data, [0.62, -0.31])
+        np.testing.assert_allclose(read_correlations["spearman_rho"].data, [0.5, -0.4])
+        assert list(read_correlations["n_bins"].data) == [12, 12]
+        assert [reference.name for reference in read_correlations["covariate"].data] == ["akinesia", "akinesia"]
+        # No p-value is reported, by design.
+        assert "p_value" not in read_correlations.colnames
 
 
 # --------------------------------------------------------------------------- #
