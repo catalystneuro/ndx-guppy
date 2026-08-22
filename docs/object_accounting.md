@@ -77,12 +77,6 @@ recording-sites registry) so that registry can stay a slim, converter-buildable 
 names + links. The removal method is recorded once on
 `GuppyParameters.artifacts_removal_method`, not re-embedded here.
 
-Tonic epoch means follow the same rule from the other direction: the result per
-(recording site, epoch, trace type) is a single scalar, so all three axes collapse into the rows
-of one `GuppyTonicEpochs` object (also a `TimeIntervals` subclass) rather than splitting on
-`trace_type` the way the array-valued products do. It exists only for a session that ran the
-optional Tonic Analysis step.
-
 Tonic epoch means, binned metrics and covariate correlations follow the same rule from the other
 direction: each result is a single scalar per combination, so every axis collapses into the rows of
 one object rather than splitting on `trace_type` the way the array-valued products do. Each exists
