@@ -61,7 +61,7 @@ These hold scalar-per-combination data, so the axis becomes a row index inside o
 |---|---|---|
 | `GuppyParameters` (LabMetaData) | — (one parameter set/session) | **1** |
 | `GuppyRecordingSitesTable` | `n_recording_sites` | **1** |
-| `GuppyEventsTable` | `n_events` | **1** |
+| `GuppyEventsTable` | `n_events`, plus one row per (transient metric, recording site) in spontaneous mode | **1** |
 | `GuppyTransientSummaryTable` | `n_recording_sites × n_features` (= 4 rows) | **1** |
 | `GuppyValidSignalIntervals` | Σ valid intervals over recording sites | **1** |
 | `GuppyTonicEpochs` | `Σ n_epochs over recording sites × n_features` | **1**, or 0 without tonic analysis |
@@ -77,16 +77,15 @@ recording-sites registry) so that registry can stay a slim, converter-buildable 
 names + links. The removal method is recorded once on
 `GuppyParameters.artifacts_removal_method`, not re-embedded here.
 
-Tonic epoch means follow the same rule from the other direction: the result per
-(recording site, epoch, trace type) is a single scalar, so all three axes collapse into the rows
-of one `GuppyTonicEpochs` object (also a `TimeIntervals` subclass) rather than splitting on
-`trace_type` the way the array-valued products do. It exists only for a session that ran the
-optional Tonic Analysis step.
-
 Tonic epoch means, binned metrics and covariate correlations follow the same rule from the other
 direction: each result is a single scalar per combination, so every axis collapses into the rows of
 one object rather than splitting on `trace_type` the way the array-valued products do. Each exists
 only for a session that ran the optional step behind it.
+
+GuPPy's spontaneous mode adds no object either. It aligns the peri-event products to the transients
+detected in each recording site's own trace rather than to external TTLs, which is just another event as
+far as the products are concerned. Those trains differ per recording site, so the events registry gains one
+row per (metric, recording site), each selecting its own site's occurrences.
 
 A behavioral covariate is the one entity here with **no registry**. The interface writes each
 covariate's scored values as a plain `TimeSeries`, so that object is the covariate's identity, and the

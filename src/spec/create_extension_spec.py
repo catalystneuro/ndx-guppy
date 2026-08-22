@@ -929,6 +929,12 @@ def main():
                 required=False,
             ),
             opt_float("binned_metrics_width", "Width of the whole-session time bins (seconds)."),
+            NWBAttributeSpec(
+                name="use_transients_as_events",
+                doc="Whether detected transients stood in for behavioral events (spontaneous mode).",
+                dtype="bool",
+                required=False,
+            ),
         ],
         datasets=[
             NWBDatasetSpec(
