@@ -1,6 +1,13 @@
 # Changelog for ndx-guppy
 
-# v0.2.0 (Upcoming)
+# v0.2.1 (Upcoming)
+
+### Features
+
+### Fixes
+
+
+# v0.2.0 (August 24th, 2026)
 
 ### Features
 * `GuppyParameters` gained `use_transients_as_events`, recording that GuPPy stood each recording site's own detected transients in for external TTLs. Such an event needs no new type: it contributes one `GuppyEventsTable` row per (metric, recording site), each selecting its own site's occurrences [PR #6](https://github.com/catalystneuro/ndx-guppy/pull/6).
