@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ndx-guppy"
-version = "0.2.1"
+version = "0.2.2"
 authors = [
     { name="Paul Adkisson-Floro", email="paul.wesley.adkisson@gmail.com" },
 ]
