@@ -25,6 +25,7 @@ indexed by some subset of these.
 | `n_epochs` | Tonic epoch windows drawn on a recording site | `tonic_epochs_<R>.csv` files | **0** — the optional Tonic Analysis step was not run |
 | `n_bins` | Fixed-width time bins a recording site is tiled into | `binned_metrics_<R>.h5` files | **0** — **Compute Binned Metrics?** was off |
 | `n_covariates` | Behavioral covariates scored alongside the session | `covariate_<name>` stores in `storesList.csv` | **0** — no covariate was labeled |
+| `n_comparison_kinds` | Kinds of PSTH significance comparison present | tests against zero; event-vs-event pairs | **0** — **Compute PSTH Significance?** was off |
 
 Two subtleties worth calling out, because they explain otherwise-surprising counts:
 
@@ -104,6 +105,7 @@ These hold an array per condition, so each condition is a separate object. Note 
 | `GuppyCrossCorrelation` | `n_features × n_recording_site_pairs` | 2 × 1 = **2** |
 | `GuppyPSTH` | `n_recording_sites × n_features × n_baselines` | 2 × 2 × 2 = **8** |
 | `GuppyPeakAUC` | `n_recording_sites × n_features` | 2 × 2 = **4** |
+| `GuppyPSTHSignificance` | `n_recording_sites × n_features × n_comparison_kinds` | 2 × 2 × 0 = **0** |
 
 ---
 
@@ -121,7 +123,7 @@ total              29
 ```
 
 The fixture ran none of the optional steps, so `GuppyTonicEpochs`, `GuppyBinnedMetrics`,
-`GuppyBinnedCovariates` and `GuppyCovariateCorrelations` contribute 0 here. Each adds exactly one
+`GuppyBinnedCovariates`, `GuppyCovariateCorrelations` and `GuppyPSTHSignificance` contribute 0 here. Each adds exactly one
 object to a session that ran it, whatever `n_epochs`, `n_bins` and `n_covariates` are — plus one
 `TimeSeries` per covariate.
 
@@ -191,6 +193,29 @@ The bins need their own grain because GuPPy bins trials in fixed groups, so bin 
 per event (fixture: 2 / 1 / 6) — ragged, handled by the same concatenate-plus-event-ref trick as
 the trials. `recording_site`, `trace_type`, `baseline_corrected`, and `unit` stay object-level
 attributes/refs because they are constant within a condition.
+
+### PSTH significance: comparison kind is a bounded axis
+
+Significance testing produces a `(num_samples, num_comparisons)` matrix per condition — an array, so
+by rule (b) it is its own object rather than rows in a table, and by rule (c) the comparisons it is
+tested over concatenate rather than multiply. It splits on one axis the other peri-event products do
+not have: **comparison kind**. A test against zero names one event; an event-versus-event comparison
+names two. Two events cannot ride on a one-event reference, and there is no null row to park an
+absent second event on, so the kind is a genuine axis of the data — and a bounded one, with exactly
+two values. Rule (c) therefore splits it into objects, exactly as the bounded `baseline_corrected`
+flag splits `GuppyPSTH`. The vs-zero object carries `event`; the paired object adds `event_b` and
+`num_trials_b`, and their presence is what tells a reader which kind it holds.
+
+The alternative — one object per condition with `event_b` covering only a trailing slice of the
+comparisons — was rejected because it makes the boundary between the two kinds a convention a reader
+has to know rather than a shape they can see.
+
+Significance is computed on the baseline-corrected PSTH only, so it does not split on `n_baselines`.
+Its comparisons are also a *subset* of the matching `GuppyPSTH`'s events: GuPPy skips a comparison
+whose event has fewer than three trials rather than writing an unreliable interval. That subsetting
+is the reason the significance columns are not simply extra datasets on `GuppyPSTH`'s per-event
+summary grain — aligning them to that grain would force a padding value for a skipped event, and a
+padded row reads as "tested, not significant" when it means "never tested".
 
 ### The remaining lever
 

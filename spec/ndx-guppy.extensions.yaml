@@ -534,6 +534,123 @@ groups:
     doc: Optional per-bin (binned-mean trace) area within each window, shape 
       (num_windows, num_bins), concatenated across events.
     quantity: '?'
+- neurodata_type_def: GuppyPSTHSignificance
+  neurodata_type_inc: NWBDataInterface
+  doc: "Bootstrap significance of a baseline-corrected PSTH for one (recording_site,
+    trace_type) condition, concatenated across comparisons, stored as samples-by-comparisons
+    matrices over the peri-event time axis. Each comparison tests one event's mean
+    PSTH against zero, or -- when the 'event_b' reference is present -- one event's
+    mean PSTH against another's. The interval is a bias-corrected and accelerated
+    (BCa) bootstrap over trials at each timepoint, and 'significant' marks a timepoint
+    only when its interval excludes zero as part of a run longer than twice the moving-average
+    filter window, which is what controls the many comparisons along the time axis.
+    Timepoints where too few trials overlap to resample carry a NaN interval and are
+    reported as not significant. The events tested here are a subset of the matching
+    GuppyPSTH's: GuPPy skips a comparison whose event has fewer than three trials
+    rather than writing an unreliable one. Sourced from psth_significance_output/significance_<comparison>.h5."
+  attributes:
+  - name: description
+    dtype: text
+    doc: Human-readable description of this significance result.
+  - name: trace_type
+    dtype: text
+    doc: "The GuPPy normalized trace this object was computed from. Controlled vocabulary:
+      'control_fit', 'dff', or 'z_score'."
+  - name: unit
+    dtype: text
+    doc: Unit of the estimate and its interval bounds (typically 'a.u.').
+  datasets:
+  - name: recording_site
+    neurodata_type_inc: DynamicTableRegion
+    doc: Reference to the GuppyRecordingSitesTable row these comparisons were 
+      computed on.
+  - name: event
+    neurodata_type_inc: DynamicTableRegion
+    doc: "Per-comparison reference into GuppyEventsTable: one row per comparison (shape
+      (num_comparisons,)), labeling the event each column was computed for. For a
+      two-event comparison this is event A, the one 'estimate' is positive for."
+  - name: event_b
+    neurodata_type_inc: DynamicTableRegion
+    doc: Per-comparison reference into GuppyEventsTable for the second event of 
+      a two-event comparison (shape (num_comparisons,)). Present only on an 
+      object holding event-versus-event comparisons; its absence means every 
+      column was tested against zero.
+    quantity: '?'
+  - name: peri_event_time
+    dtype: float64
+    dims:
+    - num_samples
+    shape:
+    - null
+    doc: Peri-event time axis in seconds relative to event onset, shape 
+      (num_samples,). The same axis as the matching GuppyPSTH's.
+  - name: estimate
+    dtype: float64
+    dims:
+    - num_samples
+    - num_comparisons
+    shape:
+    - null
+    - null
+    doc: The quantity the interval was computed on, shape (num_samples, 
+      num_comparisons). Time is the first axis. For a test against zero this is 
+      the across-trial mean PSTH; for a two-event comparison it is event A's 
+      mean minus event B's.
+  - name: confidence_interval_lower
+    dtype: float64
+    dims:
+    - num_samples
+    - num_comparisons
+    shape:
+    - null
+    - null
+    doc: Lower BCa bootstrap bound on 'estimate', shape (num_samples, 
+      num_comparisons). NaN where too few trials overlap to resample, which 
+      happens at the window edges and wherever artifact removal blanked a 
+      stretch.
+  - name: confidence_interval_upper
+    dtype: float64
+    dims:
+    - num_samples
+    - num_comparisons
+    shape:
+    - null
+    - null
+    doc: Upper BCa bootstrap bound on 'estimate', shape (num_samples, 
+      num_comparisons). NaN wherever the lower bound is.
+  - name: significant
+    dtype: bool
+    dims:
+    - num_samples
+    - num_comparisons
+    shape:
+    - null
+    - null
+    doc: Whether each timepoint fell inside a significant stretch, shape 
+      (num_samples, num_comparisons). True requires both that the interval 
+      excludes zero and that the run of such timepoints is longer than twice the
+      moving-average filter window; a shorter run is discarded along with the 
+      chance hits it cannot be told apart from. A stretch says the effect lies 
+      somewhere within it, not that it begins at its left edge.
+  - name: num_trials
+    dtype: int32
+    dims:
+    - num_comparisons
+    shape:
+    - null
+    doc: Number of trials resampled for each comparison, shape 
+      (num_comparisons,). For a two-event comparison this is event A's trial 
+      count. Between three and five the interval is driven by a handful of 
+      distinct resamples and is unreliable.
+  - name: num_trials_b
+    dtype: int32
+    dims:
+    - num_comparisons
+    shape:
+    - null
+    doc: Number of event B trials resampled for each comparison, shape 
+      (num_comparisons,). Present only alongside 'event_b'.
+    quantity: '?'
 - neurodata_type_def: GuppyValidSignalIntervals
   neurodata_type_inc: TimeIntervals
   doc: Time intervals retained as valid signal (not removed as artifacts) during
@@ -758,6 +875,18 @@ groups:
     doc: Whether detected transients stood in for behavioral events (spontaneous
       mode).
     required: false
+  - name: compute_psth_significance
+    dtype: bool
+    doc: Whether bootstrap significance testing was run on the PSTHs.
+    required: false
+  - name: psth_significance_alpha
+    dtype: float64
+    doc: Two-sided threshold the PSTH significance intervals were computed at.
+    required: false
+  - name: psth_bootstrap_resamples
+    dtype: int32
+    doc: Number of resamples each PSTH significance interval was built from.
+    required: false
   datasets:
   - name: peak_start_points
     dtype: float64
@@ -774,4 +903,25 @@ groups:
     shape:
     - null
     doc: Optional peak/AUC window end points (seconds), shape (num_windows,).
+    quantity: '?'
+  - name: psth_comparison_events_a
+    dtype: text
+    dims:
+    - num_comparisons
+    shape:
+    - null
+    doc: 'Optional first event of each event-versus-event PSTH comparison that was
+      requested, shape (num_comparisons,). Paired elementwise with psth_comparison_events_b.
+      This is what was asked for rather than what was produced: a pair whose event
+      had fewer than three trials is skipped, so it appears here but in no GuppyPSTHSignificance
+      object.'
+    quantity: '?'
+  - name: psth_comparison_events_b
+    dtype: text
+    dims:
+    - num_comparisons
+    shape:
+    - null
+    doc: Optional second event of each event-versus-event PSTH comparison that 
+      was requested, shape (num_comparisons,).
     quantity: '?'

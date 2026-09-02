@@ -29,6 +29,7 @@ GuppyTransientSummaryTable = get_class("GuppyTransientSummaryTable", "ndx-guppy"
 GuppyPSTH = get_class("GuppyPSTH", "ndx-guppy")
 GuppyCrossCorrelation = get_class("GuppyCrossCorrelation", "ndx-guppy")
 GuppyPeakAUC = get_class("GuppyPeakAUC", "ndx-guppy")
+GuppyPSTHSignificance = get_class("GuppyPSTHSignificance", "ndx-guppy")
 GuppyValidSignalIntervals = get_class("GuppyValidSignalIntervals", "ndx-guppy")
 GuppyTonicEpochs = get_class("GuppyTonicEpochs", "ndx-guppy")
 GuppyBinnedMetrics = get_class("GuppyBinnedMetrics", "ndx-guppy")
@@ -47,6 +48,7 @@ __all__ = [
     "GuppyPSTH",
     "GuppyCrossCorrelation",
     "GuppyPeakAUC",
+    "GuppyPSTHSignificance",
     "GuppyValidSignalIntervals",
     "GuppyTonicEpochs",
     "GuppyBinnedMetrics",
