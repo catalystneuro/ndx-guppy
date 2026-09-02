@@ -1,11 +1,16 @@
 # Changelog for ndx-guppy
 
-# v0.2.1 (Upcoming)
+# v0.2.2 (Upcoming)
+
+### Features
+
+### Fixes
+
+
+# v0.2.1 (September 2nd, 2026)
 
 ### Features
 * Added `GuppyPSTHSignificance`, holding the bootstrap significance of a baseline-corrected PSTH for one (recording_site, trace_type) condition, concatenated across comparisons. An object holds either the tests against zero or the event-versus-event comparisons, the latter adding `event_b` and `num_trials_b`. `GuppyParameters` gained `compute_psth_significance`, `psth_significance_alpha`, `psth_bootstrap_resamples` and the requested comparison pairs [PR #9](https://github.com/catalystneuro/ndx-guppy/pull/9).
-
-### Fixes
 
 
 # v0.2.0 (August 24th, 2026)
@@ -14,8 +19,6 @@
 * `GuppyParameters` gained `use_transients_as_events`, recording that GuPPy stood each recording site's own detected transients in for external TTLs. Such an event needs no new type: it contributes one `GuppyEventsTable` row per (metric, recording site), each selecting its own site's occurrences [PR #6](https://github.com/catalystneuro/ndx-guppy/pull/6).
 * Added `GuppyBinnedMetrics` and `GuppyBinnedCovariates`, extending `TimeIntervals` to hold GuPPy's whole-session time-binned metrics and the behavioral covariates binned onto them, and `GuppyCovariateCorrelations` for the coefficients relating the two. `GuppyParameters` gained `compute_binned_metrics` and `binned_metrics_width` [PR #5](https://github.com/catalystneuro/ndx-guppy/pull/5).
 * Added `GuppyTonicEpochs`, extending `TimeIntervals` to hold the mean level of each normalized trace within each of GuPPy's tonic epoch windows, one row per (recording_site, epoch, trace_type) [PR #4](https://github.com/catalystneuro/ndx-guppy/pull/4).
-
-### Fixes
 
 
 # v0.1.0 (July 16th, 2026)
