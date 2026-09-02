@@ -3,6 +3,7 @@
 # v0.2.1 (Upcoming)
 
 ### Features
+* Added `GuppyPSTHSignificance`, holding the bootstrap significance of a baseline-corrected PSTH for one (recording_site, trace_type) condition, concatenated across comparisons. An object holds either the tests against zero or the event-versus-event comparisons, the latter adding `event_b` and `num_trials_b`. `GuppyParameters` gained `compute_psth_significance`, `psth_significance_alpha`, `psth_bootstrap_resamples` and the requested comparison pairs [PR #9](https://github.com/catalystneuro/ndx-guppy/pull/9).
 
 ### Fixes
 

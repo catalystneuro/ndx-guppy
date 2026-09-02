@@ -22,6 +22,7 @@ from ndx_guppy import (
     GuppyPSTH,
     GuppyCrossCorrelation,
     GuppyPeakAUC,
+    GuppyPSTHSignificance,
     GuppyValidSignalIntervals,
     GuppyTonicEpochs,
     GuppyBinnedMetrics,
@@ -671,6 +672,76 @@ class TestGuppyPeakAUC:
         assert list(read_peak_auc.bin_event.data) == [0, 0, 1]
 
 
+class TestGuppyPSTHSignificance:
+    # One object per (recording_site, trace_type, comparison kind), concatenated across comparisons.
+    # A vs-zero object and a paired one are the same type; only the paired one carries event_b.
+    def _build(self, recording_sites_table, events_table, paired=False):
+        # Two comparisons over a three-sample window. The second is significant throughout, the first
+        # only at its last sample, so a per-comparison mix-up cannot pass.
+        kwargs = dict(
+            name="psth_significance_paired_dms_z_score" if paired else "psth_significance_dms_z_score",
+            description="Bootstrap significance of the dms z_score PSTH.",
+            trace_type="z_score",
+            unit="a.u.",
+            recording_site=build_dynamic_table_region("recording_site", [0], recording_sites_table),
+            event=build_dynamic_table_region("event", [0, 1], events_table),
+            peri_event_time=np.array([-1.0, 0.0, 1.0]),
+            estimate=np.array([[0.1, 2.0], [0.2, 2.5], [1.5, 3.0]]),  # (num_samples, num_comparisons)
+            confidence_interval_lower=np.array([[-0.4, 1.0], [np.nan, 1.5], [1.0, 2.0]]),
+            confidence_interval_upper=np.array([[0.6, 3.0], [np.nan, 3.5], [2.0, 4.0]]),
+            significant=np.array([[False, True], [False, True], [True, True]]),
+            num_trials=np.array([12, 8], dtype="int32"),
+        )
+        if paired:
+            kwargs.update(
+                event_b=build_dynamic_table_region("event_b", [1, 0], events_table),
+                num_trials_b=np.array([8, 12], dtype="int32"),
+            )
+        return GuppyPSTHSignificance(**kwargs)
+
+    def test_constructor(self, recording_sites_table, multi_events_table):
+        significance = self._build(recording_sites_table, multi_events_table)
+
+        assert significance.estimate.shape == (3, 2)  # time-first
+        assert list(significance.event.data) == [0, 1]
+        np.testing.assert_array_equal(significance.num_trials, [12, 8])
+        # An object holding only tests against zero has no second event to name.
+        assert significance.event_b is None
+        assert significance.num_trials_b is None
+
+    def test_paired_constructor_names_both_events(self, recording_sites_table, multi_events_table):
+        significance = self._build(recording_sites_table, multi_events_table, paired=True)
+
+        # Comparison 0 is port_entries minus rewarded_nose_pokes; comparison 1 is the reverse.
+        assert list(significance.event.data) == [0, 1]
+        assert list(significance.event_b.data) == [1, 0]
+        np.testing.assert_array_equal(significance.num_trials_b, [8, 12])
+
+    def test_roundtrip(self, nwbfile, guppy_module, recording_sites_table, multi_events_table, roundtrip):
+        guppy_module.add(recording_sites_table)
+        guppy_module.add(multi_events_table)
+        guppy_module.add(self._build(recording_sites_table, multi_events_table))
+        guppy_module.add(self._build(recording_sites_table, multi_events_table, paired=True))
+
+        read = roundtrip(nwbfile)
+        read_significance = read.processing["guppy"]["psth_significance_dms_z_score"]
+        np.testing.assert_allclose(read_significance.estimate[:], [[0.1, 2.0], [0.2, 2.5], [1.5, 3.0]])
+        # The interval is NaN where too few trials overlapped, and that timepoint is not significant.
+        assert np.isnan(read_significance.confidence_interval_lower[1, 0])
+        np.testing.assert_array_equal(read_significance.significant[:], [[False, True], [False, True], [True, True]])
+        assert read_significance.estimate.shape[0] == read_significance.peri_event_time.shape[0]
+        assert read_significance.estimate.shape[1] == read_significance.num_trials.shape[0]
+        assert list(read_significance.event.data) == [0, 1]
+        assert read_significance.event.table["event_name"].data[1] == "rewarded_nose_pokes"
+        assert read_significance.recording_site.table["recording_site"].data[0] == "dms"
+        assert read_significance.event_b is None
+
+        read_paired = read.processing["guppy"]["psth_significance_paired_dms_z_score"]
+        assert list(read_paired.event.data) == [0, 1]
+        assert list(read_paired.event_b.data) == [1, 0]
+        np.testing.assert_array_equal(read_paired.num_trials_b[:], [8, 12])
+
+
 # --------------------------------------------------------------------------- #
 # Parameters
 # --------------------------------------------------------------------------- #
@@ -687,6 +758,11 @@ class TestGuppyParameters:
             transients_thresh=2.0,
             peak_start_points=np.array([0.0, 1.0]),
             peak_end_points=np.array([1.0, 2.0]),
+            compute_psth_significance=True,
+            psth_significance_alpha=0.05,
+            psth_bootstrap_resamples=1000,
+            psth_comparison_events_a=["port_entries"],
+            psth_comparison_events_b=["rewarded_nose_pokes"],
         )
         assert params.guppy_version == "2.0.0a7"
         assert params.isosbestic_control is True
@@ -704,6 +780,11 @@ class TestGuppyParameters:
             transients_thresh=2.0,
             peak_start_points=np.array([0.0, 1.0]),
             peak_end_points=np.array([1.0, 2.0]),
+            compute_psth_significance=True,
+            psth_significance_alpha=0.05,
+            psth_bootstrap_resamples=1000,
+            psth_comparison_events_a=["port_entries"],
+            psth_comparison_events_b=["rewarded_nose_pokes"],
         )
         nwbfile.add_lab_meta_data(params)
         read = roundtrip(nwbfile)
@@ -711,3 +792,9 @@ class TestGuppyParameters:
         assert read_params.guppy_version == "2.0.0a7"
         assert read_params.zscore_method == "standard"
         np.testing.assert_array_equal(read_params.peak_end_points[:], [1.0, 2.0])
+        assert read_params.compute_psth_significance
+        assert read_params.psth_significance_alpha == 0.05
+        assert read_params.psth_bootstrap_resamples == 1000
+        # The pairs that were asked for, which a skipped comparison would not appear in any product.
+        assert list(read_params.psth_comparison_events_a[:]) == ["port_entries"]
+        assert list(read_params.psth_comparison_events_b[:]) == ["rewarded_nose_pokes"]

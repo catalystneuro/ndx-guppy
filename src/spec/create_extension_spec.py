@@ -260,9 +260,7 @@ def main():
                 doc="Whether per-trial baseline correction was applied.",
                 dtype="bool",
             ),
-            NWBAttributeSpec(
-                name="unit", doc="Unit of the PSTH values (matches the trace_type).", dtype="text"
-            ),
+            NWBAttributeSpec(name="unit", doc="Unit of the PSTH values (matches the trace_type).", dtype="text"),
         ],
         datasets=[
             recording_site_region(
@@ -679,6 +677,132 @@ def main():
         ],
     )
 
+    guppy_psth_significance = NWBGroupSpec(
+        neurodata_type_def="GuppyPSTHSignificance",
+        neurodata_type_inc="NWBDataInterface",
+        doc=(
+            "Bootstrap significance of a baseline-corrected PSTH for one (recording_site, trace_type) "
+            "condition, concatenated across comparisons, stored as samples-by-comparisons matrices over "
+            "the peri-event time axis. Each comparison tests one event's mean PSTH against zero, or -- "
+            "when the 'event_b' reference is present -- one event's mean PSTH against another's. The "
+            "interval is a bias-corrected and accelerated (BCa) bootstrap over trials at each timepoint, "
+            "and 'significant' marks a timepoint only when its interval excludes zero as part of a run "
+            "longer than twice the moving-average filter window, which is what controls the many "
+            "comparisons along the time axis. Timepoints where too few trials overlap to resample carry "
+            "a NaN interval and are reported as not significant. The events tested here are a subset of "
+            "the matching GuppyPSTH's: GuPPy skips a comparison whose event has fewer than three trials "
+            "rather than writing an unreliable one. Sourced from "
+            "psth_significance_output/significance_<comparison>.h5."
+        ),
+        attributes=[
+            NWBAttributeSpec(
+                name="description", doc="Human-readable description of this significance result.", dtype="text"
+            ),
+            trace_type_attr(),
+            NWBAttributeSpec(
+                name="unit", doc="Unit of the estimate and its interval bounds (typically 'a.u.').", dtype="text"
+            ),
+        ],
+        datasets=[
+            recording_site_region(
+                doc="Reference to the GuppyRecordingSitesTable row these comparisons were computed on.",
+            ),
+            event_region(
+                doc=(
+                    "Per-comparison reference into GuppyEventsTable: one row per comparison "
+                    "(shape (num_comparisons,)), labeling the event each column was computed for. For a "
+                    "two-event comparison this is event A, the one 'estimate' is positive for."
+                ),
+            ),
+            event_region(
+                name="event_b",
+                quantity="?",
+                doc=(
+                    "Per-comparison reference into GuppyEventsTable for the second event of a two-event "
+                    "comparison (shape (num_comparisons,)). Present only on an object holding event-versus-"
+                    "event comparisons; its absence means every column was tested against zero."
+                ),
+            ),
+            NWBDatasetSpec(
+                name="peri_event_time",
+                doc=(
+                    "Peri-event time axis in seconds relative to event onset, shape (num_samples,). The same "
+                    "axis as the matching GuppyPSTH's."
+                ),
+                dtype="float64",
+                shape=(None,),
+                dims=("num_samples",),
+            ),
+            NWBDatasetSpec(
+                name="estimate",
+                doc=(
+                    "The quantity the interval was computed on, shape (num_samples, num_comparisons). Time is "
+                    "the first axis. For a test against zero this is the across-trial mean PSTH; for a "
+                    "two-event comparison it is event A's mean minus event B's."
+                ),
+                dtype="float64",
+                shape=(None, None),
+                dims=("num_samples", "num_comparisons"),
+            ),
+            NWBDatasetSpec(
+                name="confidence_interval_lower",
+                doc=(
+                    "Lower BCa bootstrap bound on 'estimate', shape (num_samples, num_comparisons). NaN where "
+                    "too few trials overlap to resample, which happens at the window edges and wherever "
+                    "artifact removal blanked a stretch."
+                ),
+                dtype="float64",
+                shape=(None, None),
+                dims=("num_samples", "num_comparisons"),
+            ),
+            NWBDatasetSpec(
+                name="confidence_interval_upper",
+                doc=(
+                    "Upper BCa bootstrap bound on 'estimate', shape (num_samples, num_comparisons). NaN "
+                    "wherever the lower bound is."
+                ),
+                dtype="float64",
+                shape=(None, None),
+                dims=("num_samples", "num_comparisons"),
+            ),
+            NWBDatasetSpec(
+                name="significant",
+                doc=(
+                    "Whether each timepoint fell inside a significant stretch, shape "
+                    "(num_samples, num_comparisons). True requires both that the interval excludes zero and "
+                    "that the run of such timepoints is longer than twice the moving-average filter window; "
+                    "a shorter run is discarded along with the chance hits it cannot be told apart from. A "
+                    "stretch says the effect lies somewhere within it, not that it begins at its left edge."
+                ),
+                dtype="bool",
+                shape=(None, None),
+                dims=("num_samples", "num_comparisons"),
+            ),
+            NWBDatasetSpec(
+                name="num_trials",
+                doc=(
+                    "Number of trials resampled for each comparison, shape (num_comparisons,). For a "
+                    "two-event comparison this is event A's trial count. Between three and five the interval "
+                    "is driven by a handful of distinct resamples and is unreliable."
+                ),
+                dtype="int32",
+                shape=(None,),
+                dims=("num_comparisons",),
+            ),
+            NWBDatasetSpec(
+                name="num_trials_b",
+                doc=(
+                    "Number of event B trials resampled for each comparison, shape (num_comparisons,). "
+                    "Present only alongside 'event_b'."
+                ),
+                dtype="int32",
+                shape=(None,),
+                dims=("num_comparisons",),
+                quantity="?",
+            ),
+        ],
+    )
+
     guppy_valid_signal_intervals = NWBGroupSpec(
         neurodata_type_def="GuppyValidSignalIntervals",
         neurodata_type_inc="TimeIntervals",
@@ -935,6 +1059,22 @@ def main():
                 dtype="bool",
                 required=False,
             ),
+            NWBAttributeSpec(
+                name="compute_psth_significance",
+                doc="Whether bootstrap significance testing was run on the PSTHs.",
+                dtype="bool",
+                required=False,
+            ),
+            opt_float(
+                "psth_significance_alpha",
+                "Two-sided threshold the PSTH significance intervals were computed at.",
+            ),
+            NWBAttributeSpec(
+                name="psth_bootstrap_resamples",
+                doc="Number of resamples each PSTH significance interval was built from.",
+                dtype="int32",
+                required=False,
+            ),
         ],
         datasets=[
             NWBDatasetSpec(
@@ -953,6 +1093,30 @@ def main():
                 dims=("num_windows",),
                 quantity="?",
             ),
+            NWBDatasetSpec(
+                name="psth_comparison_events_a",
+                doc=(
+                    "Optional first event of each event-versus-event PSTH comparison that was requested, "
+                    "shape (num_comparisons,). Paired elementwise with psth_comparison_events_b. This is "
+                    "what was asked for rather than what was produced: a pair whose event had fewer than "
+                    "three trials is skipped, so it appears here but in no GuppyPSTHSignificance object."
+                ),
+                dtype="text",
+                shape=(None,),
+                dims=("num_comparisons",),
+                quantity="?",
+            ),
+            NWBDatasetSpec(
+                name="psth_comparison_events_b",
+                doc=(
+                    "Optional second event of each event-versus-event PSTH comparison that was requested, "
+                    "shape (num_comparisons,)."
+                ),
+                dtype="text",
+                shape=(None,),
+                dims=("num_comparisons",),
+                quantity="?",
+            ),
         ],
     )
 
@@ -965,6 +1129,7 @@ def main():
         guppy_psth,
         guppy_cross_correlation,
         guppy_peak_auc,
+        guppy_psth_significance,
         guppy_valid_signal_intervals,
         guppy_tonic_epochs,
         guppy_binned_metrics,
